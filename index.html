@@ -31,54 +31,18 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>琢玉——作文批改工具</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-
-
-
-/* 響應式設計：適應小屏幕 */
-@media (max-width: 768px) {
-    .container {
-        flex-direction: column; /* 垂直排列 */
-        height: auto; /* 取消固定高度，讓內容自然延伸 */
-    }
-    .document-area, .comment-area {
-        width: 100%; /* 佔滿屏幕寬度 */
-        border-right: none; /* 移除右邊框，避免視覺干擾 */
-        border-bottom: 1px solid #ddd; /* 在垂直布局中添加底邊框 */
-    }
-    .dark-mode .document-area {
-        border-bottom-color: #444;
-    }
-    .comment-area {
-        border-radius: 0; /* 移除圓角，適應全寬布局 */
-        box-shadow: none; /* 移除陰影，避免視覺擁擠 */
-    }
-    .pdf-container canvas, .pdf-container img {
-        width: 100%; /* 確保內容適應屏幕寬度 */
-        height: auto;
-    }
-}
-
-/* 確保所有互動元素觸控友好 */
-.controls button, .mode-toggle, .category-btn, #confirm-order {
-    padding: 10px; /* 統一內邊距 */
-    font-size: 16px; /* 統一字體大小 */
-    min-width: 50px; /* 最小寬度，方便點擊 */
-}
-
-
-
         body, html {
             margin: 0;
             padding: 0;
             height: 100%;
             font-family: 'Noto Serif TC', 'cwTeXHei', 'cwTeXFangSong', 'cwTeXKai', 'cwTeXMing', 'PingFang TC', 'Microsoft JhengHei', serif;
             background: url('https://i.ibb.co/nNMDqGJt/4.png') center/cover fixed;
-            overflow: auto; /* 改為auto，允許滾動 */
+            overflow: hidden;
             transition: background-color 0.3s, color 0.3s;
         }
         body.dark-mode {
@@ -87,7 +51,7 @@
         }
         .container {
             display: flex;
-            height: auto; /* 移除固定高度 */
+            height: 100%;
         }
         .document-area {
             flex: 7;
@@ -274,10 +238,10 @@
             border-color: #555;
         }
         button {
-            ppadding: 10px 20px;
+            padding: 10px 20px;
             margin: 15px 0;
             cursor: pointer;
-            font-size: 16px; /* 增大字體 */
+            font-size: 16px;
             background: #007bff;
             color: white;
             border: none;
@@ -438,7 +402,7 @@
             border: 1px solid #ccc;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 16px; /* 增大字體 */
+            font-size: 16px;
             transition: all 0.3s;
         }
         #file-upload:hover {
@@ -614,22 +578,6 @@
         let isDarkMode = false;
         let originalFileName = '';
         let orderedFiles = []; // 用於儲存用戶調整後的圖片順序
-
-
-
-// 檢測屏幕方向並提示用戶
-function checkOrientation() {
-    if (window.innerHeight > window.innerWidth) {
-        alert('請將設備旋轉到橫向模式以獲得最佳體驗。');
-    }
-}
-
-// 頁面加載時檢查
-window.addEventListener('load', checkOrientation);
-
-// 屏幕方向變化時檢查
-window.addEventListener('orientationchange', checkOrientation);
-
 
         function toggleDarkMode() {
             isDarkMode = !isDarkMode;
