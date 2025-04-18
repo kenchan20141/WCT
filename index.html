@@ -68,7 +68,6 @@
             overflow-y: hidden;
             background: #f5f5f5;
             position: relative;
-            border-right: 1px solid #ddd;
         }
         .dark-mode .document-area {
             background: #252525;
@@ -138,7 +137,7 @@
             color: #eee;
         }
         .page-comment-container {
-            border: 1.5px solid #d0d0d0;
+            border: none;
             border-radius: 6px;
             background: #fff;
             padding: 0px;
@@ -148,10 +147,15 @@
             transition: all 0.3s;
         }
         .dark-mode .page-comment-container {
-            border-color: #444;
             background: #2d2d2d;
         }
+        .pdf-border {
+            bborder-width: 10px; /* 四边宽度统一 */
+    border-style: solid;
+    border-color: #303f9f  ;
+        }
         .page-comment {
+color: #212121 ;
             margin: 0;
             padding: 10px 12px;
             background: transparent;
@@ -544,6 +548,46 @@
     </div>
     <div class="progress-text">生成進度：0%</div>
 
+    <script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+            if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+                try {
+                    var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                    var firstSheetName = workbook.SheetNames[0];
+                    var worksheet = workbook.Sheets[firstSheetName];
+
+                    // Convert sheet to JSON to filter blank rows
+                    var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                    // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                    var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                    // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                    var headerRowIndex = filteredData.findIndex((row, index) =>
+                      row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                    );
+                    // Fallback
+                    if (headerRowIndex === -1 || headerRowIndex > 25) {
+                      headerRowIndex = 0;
+                    }
+
+                    // Convert filtered JSON back to CSV
+                    var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                    csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                    return csv;
+                } catch (e) {
+                    console.error(e);
+                    return "";
+                }
+            }
+            return gk_fileData[filename] || "";
+        }
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -671,7 +715,7 @@
 
         function loadCurrentPdf() {
             if (currentPdfIndex >= pdfFiles.length) {
-                alert('所有作文已批改完畢，可以下班了！');
+                alert('所有作文批改完畢，可以下班了！');
                 return;
             }
 
@@ -1091,11 +1135,13 @@
                     pdf.addImage(imgData, 'JPEG', 0, 0, scaledWidth, scaledHeight);
 
                     if (comment.element.innerText.trim()) {
+                        comment.container.classList.add('pdf-border');
                         const commentCanvas = await html2canvas(comment.container, {
                             scale: 3,
                             useCORS: true,
                             backgroundColor: null
                         });
+                        comment.container.classList.remove('pdf-border');
                         pdf.addImage(commentCanvas, 'PNG', scaledWidth, 0, fixedCommentWidth, scaledHeight);
                     }
 
