@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
@@ -50,7 +11,7 @@
             margin: 0;
             padding: 0;
             height: 100%;
-            font-family: 'Noto Serif TC', 'cwTeXHei', 'cwTeXFangSong', 'cwTeXKai', 'cwTeXMing', 'PingFang TC', 'Microsoft JhengHei', serif;
+            font-family: 'cwTeXFangSong', 'cwTeXHei', 'Noto Serif TC', 'cwTeXKai', 'cwTeXMing', 'PingFang TC', 'Microsoft JhengHei', serif;
             background: url('https://i.ibb.co/nNMDqGJt/4.png') center/cover fixed;
             overflow: hidden;
             transition: background-color 0.3s, color 0.3s;
@@ -85,8 +46,6 @@
             display: block;
         }
         .pdf-container canvas, .pdf-container img {
-            max-width: 100%;
-            height: auto;
             image-rendering: crisp-edges;
             display: block;
         }
@@ -141,7 +100,7 @@
             border-radius: 6px;
             background: #fff;
             padding: 0px;
-            margin-bottom: 0px;
+            margin-bottom: 1.8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             position: relative;
             transition: all 0.3s;
@@ -150,12 +109,12 @@
             background: #2d2d2d;
         }
         .pdf-border {
-            bborder-width: 10px; /* 四边宽度统一 */
-    border-style: solid;
-    border-color: #303f9f  ;
+            border-width: 3px;
+            border-style: solid;
+            border-color: #303f9f;
         }
         .page-comment {
-color: #212121 ;
+            color: #212121;
             margin: 0;
             padding: 10px 12px;
             background: transparent;
@@ -561,23 +520,15 @@ color: #212121 ;
                     var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
                     var firstSheetName = workbook.SheetNames[0];
                     var worksheet = workbook.Sheets[firstSheetName];
-
-                    // Convert sheet to JSON to filter blank rows
                     var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                    // Filter out blank rows (rows where all cells are empty, null, or undefined)
                     var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                    // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
                     var headerRowIndex = filteredData.findIndex((row, index) =>
                       row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
                     );
-                    // Fallback
                     if (headerRowIndex === -1 || headerRowIndex > 25) {
                       headerRowIndex = 0;
                     }
-
-                    // Convert filtered JSON back to CSV
-                    var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                    var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
                     csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
                     return csv;
                 } catch (e) {
@@ -611,6 +562,7 @@ color: #212121 ;
         let originalFileName = '';
         let orderedFiles = [];
         let currentMode = '';
+        const VIEWPORT_WIDTH = 875; // 定義視口寬度為 850px
 
         function toggleDarkMode() {
             isDarkMode = !isDarkMode;
@@ -785,21 +737,26 @@ color: #212121 ;
 
         async function handleMultipleImages(files) {
             const pdfContainer = document.getElementById('pdf-container');
-            pdfContainer.innerHTML = ''; // Clear existing content to ensure images replace PDF
+            pdfContainer.innerHTML = '';
             pdfPages = [];
             pageHeights = [];
             baseWidth = 0;
-            comments = []; // Reset comments
-            totalSection = null; // Reset total section
+            comments = [];
+            totalSection = null;
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const img = await loadImage(file);
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                canvas.width = img.naturalWidth;
-                canvas.height = img.naturalHeight;
-                ctx.drawImage(img, 0, 0);
+                
+                // 根據視口寬度調整尺寸
+                const scale = VIEWPORT_WIDTH / img.naturalWidth;
+                canvas.width = img.naturalWidth * scale;
+                canvas.height = img.naturalHeight * scale;
+                canvas.style.width = `${canvas.width}px`;
+                canvas.style.height = `${canvas.height}px`;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 pdfContainer.appendChild(canvas);
 
                 pdfPages.push({
@@ -808,14 +765,14 @@ color: #212121 ;
                     originalHeight: img.naturalHeight
                 });
 
-                pageHeights.push(img.naturalHeight);
-                if (baseWidth === 0) baseWidth = img.naturalWidth;
+                pageHeights.push(canvas.height);
+                if (baseWidth === 0) baseWidth = canvas.width;
             }
 
-            initComments(files.length); // Initialize comments for each image
-            synchronizeHeights(); // Sync heights between document and comment areas
-            appendTotalSection(); // Append the total comment and scoring section
-            updateFileStatus(); // Update file status display
+            initComments(files.length);
+            synchronizeHeights();
+            appendTotalSection();
+            updateFileStatus();
         }
 
         function loadImage(file) {
@@ -832,11 +789,11 @@ color: #212121 ;
             pdfjsLib.getDocument(url).promise.then(pdf => {
                 pdfDoc = pdf;
                 const pdfContainer = document.getElementById('pdf-container');
-                pdfContainer.innerHTML = ''; // Clear existing content to ensure PDF displays correctly
+                pdfContainer.innerHTML = '';
                 pdfPages = [];
                 pageHeights = [];
-                comments = []; // Reset comments
-                totalSection = null; // Reset total section
+                comments = [];
+                totalSection = null;
                 renderAllPages(pdf, pdfContainer);
             });
         }
@@ -845,29 +802,31 @@ color: #212121 ;
             baseWidth = 0;
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                 const page = await pdf.getPage(pageNum);
-                const viewport = page.getViewport({ scale: 2.0 });
+                const originalViewport = page.getViewport({ scale: 1.0 });
+                const scale = VIEWPORT_WIDTH / originalViewport.width;
+                const viewport = page.getViewport({ scale: scale * 2.0 }); // 保持高分辨率渲染
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
 
-                canvas.height = viewport.height;
                 canvas.width = viewport.width;
-                canvas.style.width = `${viewport.width}px`;
-                canvas.style.height = `${viewport.height}px`;
+                canvas.height = viewport.height;
+                canvas.style.width = `${viewport.width / 2}px`; // 顯示時還原到視口尺寸
+                canvas.style.height = `${viewport.height / 2}px`;
                 await page.render({ canvasContext: context, viewport }).promise;
                 container.appendChild(canvas);
 
                 pdfPages.push({
                     canvas: canvas,
-                    originalWidth: viewport.width,
-                    originalHeight: viewport.height
+                    originalWidth: originalViewport.width,
+                    originalHeight: originalViewport.height
                 });
 
-                pageHeights.push(viewport.height);
-                if (baseWidth === 0) baseWidth = viewport.width;
+                pageHeights.push(viewport.height / 2);
+                if (baseWidth === 0) baseWidth = viewport.width / 2;
                 if (pageNum === pdf.numPages) {
-                    initComments(pdf.numPages); // Initialize comments for each PDF page
-                    synchronizeHeights(); // Sync heights
-                    appendTotalSection(); // Append total comment and scoring section
+                    initComments(pdf.numPages);
+                    synchronizeHeights();
+                    appendTotalSection();
                 }
             }
         }
@@ -1106,18 +1065,21 @@ color: #212121 ;
                     progressBar.style.width = `${progress.toFixed(1)}%`;
                     progressText.textContent = `生成進度：${progress.toFixed(1)}%`;
 
-                    const isPortrait = pageData.originalHeight >= pageData.originalWidth;
-                    const fixedCommentWidth = isPortrait ? 400 : 300;
                     const originalWidth = pageData.originalWidth;
                     const originalHeight = pageData.originalHeight;
-                    const scaledWidth = originalWidth * currentZoom;
-                    const scaledHeight = originalHeight * currentZoom;
-                    const pageWidth = scaledWidth + fixedCommentWidth;
-                    const pageHeight = scaledHeight;
-                    const orientation = pageWidth > pageHeight ? 'landscape' : 'portrait';
+                    let scale = VIEWPORT_WIDTH / originalWidth;
+                    if (originalWidth < VIEWPORT_WIDTH) {
+                        scale = VIEWPORT_WIDTH / originalWidth; // 小尺寸圖片放大
+                    }
+                    const pdfWidth = VIEWPORT_WIDTH * currentZoom;
+                    const pdfHeight = originalHeight * scale * currentZoom;
+                    const isPortrait = pdfHeight >= pdfWidth;
+                    const fixedCommentWidth = isPortrait ? 400 : 300;
+                    const pageWidth = pdfWidth + fixedCommentWidth;
+                    const pageHeight = pdfHeight;
 
                     if (index > 0) {
-                        pdf.addPage([pageWidth, pageHeight], orientation);
+                        pdf.addPage([pageWidth, pageHeight], pageWidth > pageHeight ? 'landscape' : 'portrait');
                     } else {
                         pdf.internal.pageSize.width = pageWidth;
                         pdf.internal.pageSize.height = pageHeight;
@@ -1126,13 +1088,13 @@ color: #212121 ;
 
                     const imgData = await new Promise(resolve => {
                         const tempCanvas = document.createElement('canvas');
-                        tempCanvas.width = scaledWidth;
-                        tempCanvas.height = scaledHeight;
+                        tempCanvas.width = pdfWidth;
+                        tempCanvas.height = pdfHeight;
                         const ctx = tempCanvas.getContext('2d');
-                        ctx.drawImage(pageData.canvas, 0, 0, scaledWidth, scaledHeight);
+                        ctx.drawImage(pageData.canvas, 0, 0, pdfWidth, pdfHeight);
                         resolve(tempCanvas.toDataURL('image/jpeg', 0.9));
                     });
-                    pdf.addImage(imgData, 'JPEG', 0, 0, scaledWidth, scaledHeight);
+                    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
 
                     if (comment.element.innerText.trim()) {
                         comment.container.classList.add('pdf-border');
@@ -1142,7 +1104,7 @@ color: #212121 ;
                             backgroundColor: null
                         });
                         comment.container.classList.remove('pdf-border');
-                        pdf.addImage(commentCanvas, 'PNG', scaledWidth, 0, fixedCommentWidth, scaledHeight);
+                        pdf.addImage(commentCanvas, 'PNG', pdfWidth, 0, fixedCommentWidth, pdfHeight);
                     }
 
                     await new Promise(resolve => setTimeout(resolve, 50));
