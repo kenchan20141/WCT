@@ -11,7 +11,7 @@
             margin: 0;
             padding: 0;
             height: 100%;
-            font-family: 'cwTeXFangSong', 'cwTeXHei', 'Noto Serif TC', 'cwTeXKai', 'cwTeXMing', 'PingFang TC', 'Microsoft JhengHei', serif;
+            font-family: 'Noto Serif TC', 'cwTeXHei', 'cwTeXFangSong', 'cwTeXKai', 'cwTeXMing', 'PingFang TC', 'Microsoft JhengHei', serif;
             background: url('https://i.ibb.co/nNMDqGJt/4.png') center/cover fixed;
             overflow: hidden;
             transition: background-color 0.3s, color 0.3s;
@@ -95,18 +95,36 @@
         .dark-mode .comment-section h3 {
             color: #eee;
         }
-        .page-comment-container {
-            border: none;
-            border-radius: 6px;
-            background: #fff;
-            padding: 0px;
-            margin-bottom: 1.8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            position: relative;
-            transition: all 0.3s;
-        }
+
+.page-comment-container {
+    border: none;
+    border-radius: 6px;
+    /* background: url('https://i.ibb.co/7NjfG1Pk/image.png') repeat; */
+/* background: rgba(255, 245, 235, 0.98); */
+    padding: 0px;
+    margin-bottom: 1.8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    position: relative; /* 新增定位 */
+    overflow: hidden; /* 新增溢出处理 */
+    transition: all 0.3s;
+
+}
+
+
+     /* 新增底部区域样式 */
+.page-comment-container::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 15px; /* 底部区域高度 */
+    background-color: #a9cce3  ; /* 下方A颜色（浅色模式） */
+}
+
         .dark-mode .page-comment-container {
-            background: #2d2d2d;
+            background: #444444; /* 中性深灰（RGB: 68, 68, 68），完全无偏色的深灰 */
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* 深色模式下阴影稍强 */
         }
         .pdf-border {
             border-width: 3px;
@@ -127,7 +145,7 @@
             word-wrap: break-word;
             overflow-wrap: break-word;
             overflow: hidden;
-            font-family: 'Noto Serif TC', 'cwTeXHei', 'cwTeXFangSong', 'cwTeXKai', 'cwTeXMing', 'PingFang TC', 'Microsoft JhengHei', serif;
+            font-family: 'cwTeXFangSong', 'cwTeXHei', 'Noto Serif TC', 'cwTeXKai', 'cwTeXMing', 'PingFang TC', 'Microsoft JhengHei', serif;
             transition: all 0.3s;
             border: none;
             outline: none;
@@ -1145,7 +1163,7 @@
                 pdf.addPage([794, 1123], 'portrait');
                 pdf.addImage(totalCanvas, 'PNG', 0, 0, 794, 1123);
 
-                const newFileName = originalFileName ? `${originalFileName}（已批改）.pdf` : '批改結果.pdf';
+                const newFileName = originalFileName ? `${originalFileName}【已批改】.pdf` : '批改結果.pdf';
                 pdf.save(newFileName);
                 progressContainer.style.display = 'none';
                 progressText.style.display = 'none';
@@ -1155,7 +1173,7 @@
                     if (currentPdfIndex < pdfFiles.length) {
                         loadCurrentPdf();
                     } else {
-                        alert('所有作文已批改完畢，可以下班了！');
+                        alert('所有作文批改完畢，可以下班了！');
                     }
                 }
             } catch (error) {
