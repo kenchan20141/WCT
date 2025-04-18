@@ -2,6 +2,9 @@
         var gk_isXlsx = false;
         var gk_xlsxFileLookup = {};
         var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
         function loadFileData(filename) {
         if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
             try {
@@ -12,12 +15,19 @@
                 // Convert sheet to JSON to filter blank rows
                 var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
                 // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row =>
-                    row.some(cell => cell !== '' && cell !== null && cell !== undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
                 );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
 
                 // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData); // Create a new sheet from filtered array of arrays
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
                 csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
                 return csv;
             } catch (e) {
@@ -55,7 +65,7 @@
         }
         .document-area {
             flex: 7;
-            overflow-y: hidden; /* 初始設置為hidden以避免滾動條 */
+            overflow-y: hidden;
             background: #f5f5f5;
             position: relative;
             border-right: 1px solid #ddd;
@@ -68,18 +78,18 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            display: block; /* 設置為block以正確顯示並鋪滿 */
+            display: block;
         }
         .pdf-container {
             transform-origin: top left;
             transition: transform 0.3s ease;
-            display: block; /* 修訂：設置為block以垂直堆疊 */
+            display: block;
         }
         .pdf-container canvas, .pdf-container img {
             max-width: 100%;
             height: auto;
             image-rendering: crisp-edges;
-            display: block; /* 修訂：設置為block以佔據整行 */
+            display: block;
         }
         .comment-area {
             flex: 3;
@@ -131,8 +141,8 @@
             border: 1.5px solid #d0d0d0;
             border-radius: 6px;
             background: #fff;
-            padding: 0px; /* 增加內邊距適應更大文字 */
-            margin-bottom: 0px; /* 增加間距 */
+            padding: 0px;
+            margin-bottom: 0px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             position: relative;
             transition: all 0.3s;
@@ -175,8 +185,8 @@
             right: 10px;
             background: #5b7db1;
             color: white;
-            font-size: 16px; /* 頁碼同步放大 */
-            padding: 4px 12px; /* 頁碼按鈕放大 */
+            font-size: 16px;
+            padding: 4px 12px;
             border-radius: 10px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
@@ -270,13 +280,17 @@
             padding: 10px;
             z-index: 10;
             display: flex;
-            gap: 10px;
+            justify-content: space-between;
             align-items: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            justify-content: space-between;
         }
         .dark-mode .controls {
             background: #333;
+        }
+        .left-controls, .right-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         .font-size-control {
             display: inline-flex;
@@ -300,17 +314,18 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #e0e0e0; /* 未激活時的灰色背景 */
+            background: #e0e0e0;
         }
         .dark-mode .mode-toggle {
             background: rgba(60,60,60,0.7);
         }
         .tool-title {
+            flex: 1;
+            text-align: center;
             font-size: 30px;
             font-weight: bold;
             color: #34495e;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-            margin: 0 80px; /* 左右各50px間距，可根據需要調整 */
         }
         .dark-mode .tool-title {
             color: #66aaff;
@@ -395,7 +410,7 @@
         .dark-mode .total-comment h4 {
             color: #eee;
         }
-        #file-upload {
+        #file-upload-label {
             padding: 10px 20px;
             background: #f0f0f0;
             color: #000;
@@ -405,32 +420,27 @@
             font-size: 16px;
             transition: all 0.3s;
         }
-        #file-upload:hover {
+        #file-upload-label:hover {
             background: #e0e0e0;
         }
-        .dark-mode #file-upload {
+        .dark-mode #file-upload-label {
             background: #444;
             color: #fff;
             border-color: #555;
         }
-        .dark-mode #file-upload:hover {
+        .dark-mode #file-upload-label:hover {
             background: #555;
         }
-        /* 模態框樣式 */
-       /* 確認按鈕樣式 */
-#confirm-order {
-  margin-top: 10px;
-  padding: 10px;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
- /* 新增水平居中樣式 */
-  display: flex;          /* 保持 flex 布局以便圖標和文字居中（如有圖標） */
-  justify-content: center;  /* 水平居中內容 */
-  text-align: center;       /* 確保文字自身居中（備用，防止內容不為 flex 時失效） */
-}
+        #file-upload {
+            display: none;
+        }
+        #file-status {
+            font-size: 16px;
+            color: #333;
+        }
+        .dark-mode #file-status {
+            color: #ddd;
+        }
         #file-order-modal > div {
             background: white;
             margin: 100px auto;
@@ -455,56 +465,54 @@
             margin-right: 10px;
             cursor: pointer;
         }
-.progress-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 20px;
-    background-color: #117864;
-    z-index: 1000;
-    display: none;
-}
-
-/* 进度条轨道（可选：如需实心绿色，可将背景色改为绿色） */
-.progress-bar {
-  width: 100%;
-  height: 5px;
-  background-color: #117864; /* 关键修改点 1 */
-  margin-top: 10px;
-}
-
-/* 进度条填充（核心：改为纯绿色） */
-.progress-bar-inner {
-  height: 100%;
-  background-color: #117864; /* 关键修改点 2 */
-  width: 0;
-  transition: width 0.2s ease;
-}
-
-.progress-text {
-    position: fixed;
-    top: 30px;
-    right: 20px;
-    color: #666;
-    font-size: 18px;
-    z-index: 1000;
-    display: none;
-}
-
+        .progress-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            background-color: #117864;
+            z-index: 1000;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 5px;
+            background-color: #117864;
+            margin-top: 10px;
+        }
+        .progress-bar-inner {
+            height: 100%;
+            background-color: #117864;
+            width: 0;
+            transition: width 0.2s ease;
+        }
+        .progress-text {
+            position: fixed;
+            top: 30px;
+            right: 20px;
+            color: #666;
+            font-size: 18px;
+            z-index: 1000;
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="document-area" id="document-area">
             <div class="controls">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <input type="file" id="file-upload" accept="image/*,application/pdf" multiple>
-                    <button onclick="zoomIn()"><i class="fas fa-search-plus"></i> </button>
-                    <button onclick="zoomOut()"><i class="fas fa-search-minus"></i> </button>
-                    <div class="tool-title">琢玉</div>
+                <div class="left-controls">
+                    <label for="file-upload" id="file-upload-label">選擇檔案</label>
+                    <input type="file" id="file-upload" accept="image/*,application/pdf" multiple style="display: none;">
+                    <span id="file-status"></span>
                 </div>
-                <button class="mode-toggle" onclick="toggleDarkMode()"><i class="fas fa-moon"></i></button>
+                <div class="tool-title">琢玉</div>
+                <div class="right-controls">
+                    <button onclick="zoomIn()"><i class="fas fa-search-plus"></i></button>
+                    <button onclick="zoomOut()"><i class="fas fa-search-minus"></i></button>
+                    <button class="mode-toggle" onclick="toggleDarkMode()"><i class="fas fa-moon"></i></button>
+                </div>
             </div>
             <img id="default-image" src="https://i.ibb.co/DH4C0TgB/image.png" alt="Default Image">
             <div class="pdf-container" id="pdf-container" style="display: none;"></div>
@@ -521,50 +529,30 @@
             </div>
         </div>
     </div>
-    <!-- 模態框用於調整圖片順序 -->
     <div id="file-order-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
-  <div style="background: white; margin: 100px auto; padding: 20px; width: 400px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); position: relative;">
-    <h3>安排圖片順序</h3>
-    <ul id="file-list" style="list-style: none; padding: 0; max-height: 300px; overflow-y: auto;"></ul>
-    <div class="progress-bar">
-      <div class="progress-bar-inner"></div>
+        <div style="background: white; margin: 100px auto; padding: 20px; width: 400px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); position: relative;">
+            <h3>安排圖片順序</h3>
+            <ul id="file-list" style="list-style: none; padding: 0; max-height: 300px; overflow-y: auto;"></ul>
+            <div class="progress-bar">
+                <div class="progress-bar-inner"></div>
+            </div>
+            <button id="confirm-order" style="margin-top: 10px; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; text-align: center; width: 100%;">確認</button>
+        </div>
     </div>
-    <button id="confirm-order" style="position: sticky; bottom: 0; width: 100%;">確認</button>
-  </div>
-</div>
+    <div class="progress-container">
+        <div class="progress-bar"></div>
+    </div>
+    <div class="progress-text">生成進度：0%</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<!-- 引入 Sortable.js（在<head>中添加） -->
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script>
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function loadFileData(filename) {
-            if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-                try {
-                    var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                    var firstSheetName = workbook.SheetNames[0];
-                    var worksheet = workbook.Sheets[firstSheetName];
-                    var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                    var filteredData = jsonData.filter(row =>
-                        row.some(cell => cell !== '' && cell !== null && cell !== undefined)
-                    );
-                    var csv = XLSX.utils.aoa_to_sheet(filteredData);
-                    csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                    return csv;
-                } catch (e) {
-                    console.error(e);
-                    return "";
-                }
-            }
-            return gk_fileData[filename] || "";
-        }
-
         const { jsPDF } = window.jspdf;
+        let pdfFiles = [];
+        let pdfData = [];
+        let currentPdfIndex = 0;
         let pdfPages = [];
         let pdfDoc = null;
         let currentZoom = 1.0;
@@ -577,7 +565,8 @@
         let currentFileType = '';
         let isDarkMode = false;
         let originalFileName = '';
-        let orderedFiles = []; // 用於儲存用戶調整後的圖片順序
+        let orderedFiles = [];
+        let currentMode = '';
 
         function toggleDarkMode() {
             isDarkMode = !isDarkMode;
@@ -611,32 +600,51 @@
 
         document.getElementById('file-upload').addEventListener('change', function(event) {
             const files = event.target.files;
-            if (files.length === 0) return;
+            if (files.length === 0) {
+                document.getElementById('file-status').textContent = '';
+                return;
+            }
 
-            pdfPages = [];
-            comments = [];
-            totalSection = null;
-            currentZoom = 1.0;
-            const pdfContainer = document.getElementById('pdf-container');
-            pdfContainer.innerHTML = '';
+            const allPdfs = Array.from(files).every(file => file.type === 'application/pdf');
+            const allImages = Array.from(files).every(file => file.type.startsWith('image/'));
 
             if (files.length > 1) {
-                // 檢查是否所有文件都是圖片
-                const allImages = Array.from(files).every(file => file.type.startsWith('image/'));
-                if (!allImages) {
-                    alert('請選擇多張圖片或單一PDF檔案。');
+                if (allPdfs) {
+                    currentMode = 'multiplePdfs';
+                    pdfFiles = Array.from(files);
+                    pdfData = pdfFiles.map(file => ({
+                        file: file,
+                        comments: [],
+                        totalComment: '',
+                        scores: {},
+                        categories: {}
+                    }));
+                    currentPdfIndex = 0;
+                    loadCurrentPdf();
+                } else if (allImages) {
+                    currentMode = 'multipleImages';
+                    showFileOrderModal(files);
+                } else {
+                    alert('請選擇多個PDF檔案或多張圖片。');
                     return;
                 }
-                // 顯示模態框讓用戶調整順序
-                showFileOrderModal(files);
             } else {
-                // 單一文件處理
                 const file = files[0];
                 originalFileName = file.name.split('.').slice(0, -1).join('.');
                 if (file.type === 'application/pdf') {
+                    currentMode = 'singlePdf';
+                    pdfFiles = [file];
+                    pdfData = [{ file: file, comments: [], totalComment: '', scores: {}, categories: {} }];
+                    currentPdfIndex = 0;
                     loadPDF(file);
+                    updateFileStatus();
                 } else if (file.type.startsWith('image/')) {
+                    currentMode = 'singleImage';
+                    pdfFiles = [];
+                    pdfData = [{ comments: [], totalComment: '', scores: {}, categories: {} }];
+                    currentPdfIndex = 0;
                     handleMultipleImages([file]);
+                    updateFileStatus();
                 } else {
                     alert('不支援的檔案類型。');
                     return;
@@ -648,130 +656,97 @@
             document.getElementById('document-area').style.overflowY = 'auto';
         });
 
-        // 顯示模態框並初始化圖片列表
-       function showFileOrderModal(files) {
-  orderedFiles = Array.from(files);
-  renderFileList();
-  document.getElementById('file-order-modal').style.display = 'block';
-
-  // 添加滾動事件監聽
-  const fileList = document.getElementById('file-list');
-  const progressBarInner = document.querySelector('.progress-bar-inner');
-
-  fileList.addEventListener('scroll', () => {
-    const scrollTop = fileList.scrollTop; // 當前滾動位置
-    const scrollHeight = fileList.scrollHeight; // 總高度
-    const clientHeight = fileList.clientHeight; // 可見高度
-    const progress = (scrollTop / (scrollHeight - clientHeight)) * 100; // 計算進度百分比
-    progressBarInner.style.width = `${progress}%`; // 更新進度條寬度
-  });
-}
-
-        // 移除原生拖放事件监听器（handleDragStart/handleDragOver/handleDrop）
-// 改用 Sortable.js 实现
-
-function renderFileList() {
-  const fileList = document.getElementById('file-list');
-  fileList.innerHTML = '';
-  orderedFiles.forEach((file, index) => {
-    const li = document.createElement('li');
-    const img = document.createElement('img');
-    img.className = 'thumbnail';
-    img.src = URL.createObjectURL(file);
-    img.addEventListener('click', () => showEnlargedImage(file));
-    li.appendChild(img);
-    const span = document.createElement('span');
-    span.textContent = file.name;
-    li.appendChild(span);
-    fileList.appendChild(li);
-  });
-
-  new Sortable(fileList, {
-    animation: 150,
-    onEnd: (evt) => {
-      [orderedFiles[evt.oldIndex], orderedFiles[evt.newIndex]] = [orderedFiles[evt.newIndex], orderedFiles[evt.oldIndex]];
-    }
-  });
-}
-
-        let draggedItem = null;
-
-        function handleDragStart(e) {
-            draggedItem = this;
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/html', this.innerHTML);
+        function updateFileStatus() {
+            const fileStatus = document.getElementById('file-status');
+            if (currentMode === 'multiplePdfs') {
+                fileStatus.textContent = `正在批改第${currentPdfIndex + 1}篇作文，共${pdfFiles.length}篇`;
+            } else if (currentMode === 'singlePdf' || currentMode === 'singleImage') {
+                fileStatus.textContent = originalFileName;
+            } else if (currentMode === 'multipleImages') {
+                fileStatus.textContent = `${pdfPages.length}頁`;
+            } else {
+                fileStatus.textContent = '';
+            }
         }
 
-        function handleDragOver(e) {
-  if (e.preventDefault) {
-    e.preventDefault(); // 阻止浏览器默认行为
-  }
-  e.dataTransfer.dropEffect = 'move'; // 设置拖放效果为移动
-  return false;
-}
+        function loadCurrentPdf() {
+            if (currentPdfIndex >= pdfFiles.length) {
+                alert('所有作文已批改完畢，可以下班了！');
+                return;
+            }
 
-        function handleDrop(e) {
-            if (e.stopPropagation) {
-                e.stopPropagation();
-            }
-            if (draggedItem !== this) {
-                const draggedIndex = parseInt(draggedItem.dataset.index);
-                const targetIndex = parseInt(this.dataset.index);
-                if (draggedIndex < targetIndex) {
-                    this.parentNode.insertBefore(draggedItem, this.nextSibling);
-                } else {
-                    this.parentNode.insertBefore(draggedItem, this);
-                }
-                // 更新orderedFiles數組
-                const file = orderedFiles.splice(draggedIndex, 1)[0];
-                orderedFiles.splice(targetIndex, 0, file);
-                // 更新所有li的dataset.index
-                const lis = document.querySelectorAll('#file-list li');
-                lis.forEach((li, idx) => {
-                    li.dataset.index = idx;
-                });
-            }
-            return false;
+            pdfPages = [];
+            comments = [];
+            totalSection = null;
+            currentZoom = 1.0;
+            const pdfContainer = document.getElementById('pdf-container');
+            pdfContainer.innerHTML = '';
+
+            const currentPdf = pdfFiles[currentPdfIndex];
+            originalFileName = currentPdf.name.split('.').slice(0, -1).join('.');
+            loadPDF(currentPdf);
+
+            updateFileStatus();
         }
 
-        function showEnlargedImage(file) {
-            const modal = document.createElement('div');
-            modal.style.position = 'fixed';
-            modal.style.top = '0';
-            modal.style.left = '0';
-            modal.style.width = '100%';
-            modal.style.height = '100%';
-            modal.style.backgroundColor = 'rgba(0,0,0,0.8)';
-            modal.style.display = 'flex';
-            modal.style.justifyContent = 'center';
-            modal.style.alignItems = 'center';
-            modal.style.zIndex = '1001';
-            const img = document.createElement('img');
-            img.src = URL.createObjectURL(file);
-            img.style.maxWidth = '90%';
-            img.style.maxHeight = '90%';
-            img.style.objectFit = 'contain';
-            modal.appendChild(img);
-            modal.addEventListener('click', () => {
-                document.body.removeChild(modal);
+        function showFileOrderModal(files) {
+            orderedFiles = Array.from(files);
+            renderFileList();
+            document.getElementById('file-order-modal').style.display = 'block';
+
+            const fileList = document.getElementById('file-list');
+            const progressBarInner = document.querySelector('.progress-bar-inner');
+
+            fileList.addEventListener('scroll', () => {
+                const scrollTop = fileList.scrollTop;
+                const scrollHeight = fileList.scrollHeight;
+                const clientHeight = fileList.clientHeight;
+                const progress = (scrollTop / (scrollHeight - clientHeight)) * 100;
+                progressBarInner.style.width = `${progress}%`;
             });
-            document.body.appendChild(modal);
         }
 
-        // 確認按鈕事件，處理調整後的圖片
+        function renderFileList() {
+            const fileList = document.getElementById('file-list');
+            fileList.innerHTML = '';
+            orderedFiles.forEach((file, index) => {
+                const li = document.createElement('li');
+                const img = document.createElement('img');
+                img.className = 'thumbnail';
+                img.src = URL.createObjectURL(file);
+                img.addEventListener('click', () => showEnlargedImage(file));
+                li.appendChild(img);
+                const span = document.createElement('span');
+                span.textContent = file.name;
+                li.appendChild(span);
+                fileList.appendChild(li);
+            });
+
+            new Sortable(fileList, {
+                animation: 150,
+                onEnd: (evt) => {
+                    [orderedFiles[evt.oldIndex], orderedFiles[evt.newIndex]] = [orderedFiles[evt.newIndex], orderedFiles[evt.oldIndex]];
+                }
+            });
+        }
+
         document.getElementById('confirm-order').addEventListener('click', function() {
             document.getElementById('file-order-modal').style.display = 'none';
-            if (orderedFiles.length > 0) {
-                originalFileName = orderedFiles[0].name.split('.').slice(0, -1).join('.');
-            }
+            pdfFiles = [];
+            pdfData = [{ comments: [], totalComment: '', scores: {}, categories: {} }];
+            currentPdfIndex = 0;
             handleMultipleImages(orderedFiles);
+            updateFileStatus();
         });
 
         async function handleMultipleImages(files) {
             const pdfContainer = document.getElementById('pdf-container');
+            pdfContainer.innerHTML = ''; // Clear existing content to ensure images replace PDF
             pdfPages = [];
             pageHeights = [];
             baseWidth = 0;
+            comments = []; // Reset comments
+            totalSection = null; // Reset total section
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -793,9 +768,10 @@ function renderFileList() {
                 if (baseWidth === 0) baseWidth = img.naturalWidth;
             }
 
-            initComments(files.length);
-            synchronizeHeights();
-            appendTotalSection();
+            initComments(files.length); // Initialize comments for each image
+            synchronizeHeights(); // Sync heights between document and comment areas
+            appendTotalSection(); // Append the total comment and scoring section
+            updateFileStatus(); // Update file status display
         }
 
         function loadImage(file) {
@@ -812,10 +788,11 @@ function renderFileList() {
             pdfjsLib.getDocument(url).promise.then(pdf => {
                 pdfDoc = pdf;
                 const pdfContainer = document.getElementById('pdf-container');
-                pdfContainer.innerHTML = '';
+                pdfContainer.innerHTML = ''; // Clear existing content to ensure PDF displays correctly
                 pdfPages = [];
                 pageHeights = [];
-                comments = [];
+                comments = []; // Reset comments
+                totalSection = null; // Reset total section
                 renderAllPages(pdf, pdfContainer);
             });
         }
@@ -844,9 +821,9 @@ function renderFileList() {
                 pageHeights.push(viewport.height);
                 if (baseWidth === 0) baseWidth = viewport.width;
                 if (pageNum === pdf.numPages) {
-                    initComments(pdf.numPages);
-                    synchronizeHeights();
-                    appendTotalSection();
+                    initComments(pdf.numPages); // Initialize comments for each PDF page
+                    synchronizeHeights(); // Sync heights
+                    appendTotalSection(); // Append total comment and scoring section
                 }
             }
         }
@@ -878,7 +855,7 @@ function renderFileList() {
                 const divHeight = pageHeights[i] * currentZoom;
                 commentDiv.style.fontSize = `${fontSize}px`;
                 const lines = Math.floor((divHeight - 20) / LINE_HEIGHT);
-                commentDiv.textContent = '\n'.repeat(lines - 1);
+                commentDiv.textContent = pdfData[currentPdfIndex].comments[i] || '\n'.repeat(lines - 1);
                 commentContainer.appendChild(commentDiv);
 
                 commentSection.appendChild(commentContainer);
@@ -976,7 +953,7 @@ function renderFileList() {
                 totalSection.className = 'total-comment';
                 totalSection.innerHTML = `
                     <h3>總評</h3>
-                    <textarea id="total-comment-text" rows="6" placeholder="輸入總評"></textarea>
+                    <textarea id="total-comment-text" rows="6" placeholder="輸入總評">${pdfData[currentPdfIndex].totalComment}</textarea>
                     <h4>範疇</h4>
                     <div class="problem-categories">
                         <button class="category-btn" data-category="取材">取材</button>
@@ -989,23 +966,23 @@ function renderFileList() {
                     <h4>評分</h4>
                     <div class="score-input">
                         <label>內容:</label>
-                        <input type="number" id="content-score" min="0" max="10">
+                        <input type="number" id="content-score" min="0" max="10" value="${pdfData[currentPdfIndex].scores.content || ''}">
                     </div>
                     <div class="score-input">
                         <label>結構:</label>
-                        <input type="number" id="structure-score" min="0" max="10">
+                        <input type="number" id="structure-score" min="0" max="10" value="${pdfData[currentPdfIndex].scores.structure || ''}">
                     </div>
                     <div class="score-input">
                         <label>表達:</label>
-                        <input type="number" id="expression-score" min="0" max="10">
+                        <input type="number" id="expression-score" min="0" max="10" value="${pdfData[currentPdfIndex].scores.expression || ''}">
                     </div>
                     <div class="score-input">
                         <label>標點符號:</label>
-                        <input type="number" id="punctuation-score" min="0" max="10">
+                        <input type="number" id="punctuation-score" min="0" max="10" value="${pdfData[currentPdfIndex].scores.punctuation || ''}">
                     </div>
                     <div class="score-input">
                         <label>錯別字:</label>
-                        <input type="number" id="bonus-score" min="0" max="3">
+                        <input type="number" id="bonus-score" min="0" max="3" value="${pdfData[currentPdfIndex].scores.bonus || ''}">
                     </div>
                     <div class="total-score-display">
                         <label>總分:</label>
@@ -1019,16 +996,24 @@ function renderFileList() {
                 });
                 document.querySelectorAll('.category-btn').forEach(btn => {
                     btn.addEventListener('click', function() {
+                        const category = this.dataset.category;
                         if (this.classList.contains('active-red')) {
                             this.classList.remove('active-red');
                             this.classList.add('active-green');
+                            pdfData[currentPdfIndex].categories[category] = 'green';
                         } else if (this.classList.contains('active-green')) {
                             this.classList.remove('active-green');
+                            delete pdfData[currentPdfIndex].categories[category];
                         } else {
                             this.classList.add('active-red');
+                            pdfData[currentPdfIndex].categories[category] = 'red';
                         }
                     });
+                    const state = pdfData[currentPdfIndex].categories[btn.dataset.category];
+                    if (state === 'red') btn.classList.add('active-red');
+                    else if (state === 'green') btn.classList.add('active-green');
                 });
+                calculateTotalScore();
             }
         }
 
@@ -1042,147 +1027,149 @@ function renderFileList() {
         }
 
         async function generatePDF() {
-    if (pdfPages.length === 0) return;
+            if (pdfPages.length === 0) return;
 
-    // 初始化进度条
-    const progressContainer = document.querySelector('.progress-container');
-    const progressBar = document.querySelector('.progress-bar');
-    const progressText = document.querySelector('.progress-text');
-    progressContainer.style.display = 'block';
-    progressText.style.display = 'block';
-    progressBar.style.width = '0%';
-    progressText.textContent = '生成進度：0%';
+            pdfData[currentPdfIndex].comments = comments.map(comment => comment.element.textContent);
+            pdfData[currentPdfIndex].totalComment = document.getElementById('total-comment-text').value;
+            pdfData[currentPdfIndex].scores = {
+                content: document.getElementById('content-score').value,
+                structure: document.getElementById('structure-score').value,
+                expression: document.getElementById('expression-score').value,
+                punctuation: document.getElementById('punctuation-score').value,
+                bonus: document.getElementById('bonus-score').value
+            };
 
-    const pdf = new jsPDF({
-        unit: 'px',
-        compress: true
-    });
-    const totalPages = pdfPages.length;
+            const progressContainer = document.querySelector('.progress-container');
+            const progressBar = document.querySelector('.progress-bar');
+            const progressText = document.querySelector('.progress-text');
+            progressContainer.style.display = 'block';
+            progressText.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressText.textContent = '生成進度：0%';
 
-    try {
-        for (let index = 0; index < totalPages; index++) {
-            const pageData = pdfPages[index];
-            const comment = comments[index];
-
-            // 计算进度（示例：每处理完一页更新一次）
-            const progress = ((index + 1) / totalPages) * 100;
-            progressBar.style.width = `${progress.toFixed(1)}%`;
-            progressText.textContent = `生成進度：${progress.toFixed(1)}%`;
-
-            // 原有页面处理逻辑...
-            const isPortrait = pageData.originalHeight >= pageData.originalWidth;
-            const fixedCommentWidth = isPortrait ? 400 : 300;
-            const originalWidth = pageData.originalWidth;
-            const originalHeight = pageData.originalHeight;
-            const scaledWidth = originalWidth * currentZoom;
-            const scaledHeight = originalHeight * currentZoom;
-            const pageWidth = scaledWidth + fixedCommentWidth;
-            const pageHeight = scaledHeight;
-            const orientation = pageWidth > pageHeight ? 'landscape' : 'portrait';
-
-            if (index > 0) {
-                pdf.addPage([pageWidth, pageHeight], orientation);
-            } else {
-                pdf.internal.pageSize.width = pageWidth;
-                pdf.internal.pageSize.height = pageHeight;
-                pdf.setPage(1);
-            }
-
-            const imgData = await new Promise(resolve => {
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = scaledWidth;
-                tempCanvas.height = scaledHeight;
-                const ctx = tempCanvas.getContext('2d');
-                ctx.drawImage(pageData.canvas, 0, 0, scaledWidth, scaledHeight);
-                resolve(tempCanvas.toDataURL('image/jpeg', 0.9));
+            const pdf = new jsPDF({
+                unit: 'px',
+                compress: true
             });
-            pdf.addImage(imgData, 'JPEG', 0, 0, scaledWidth, scaledHeight);
+            const totalPages = pdfPages.length;
 
-            if (comment.element.innerText.trim()) {
-                const commentCanvas = await html2canvas(comment.container, {
+            try {
+                for (let index = 0; index < totalPages; index++) {
+                    const pageData = pdfPages[index];
+                    const comment = comments[index];
+
+                    const progress = ((index + 1) / totalPages) * 100;
+                    progressBar.style.width = `${progress.toFixed(1)}%`;
+                    progressText.textContent = `生成進度：${progress.toFixed(1)}%`;
+
+                    const isPortrait = pageData.originalHeight >= pageData.originalWidth;
+                    const fixedCommentWidth = isPortrait ? 400 : 300;
+                    const originalWidth = pageData.originalWidth;
+                    const originalHeight = pageData.originalHeight;
+                    const scaledWidth = originalWidth * currentZoom;
+                    const scaledHeight = originalHeight * currentZoom;
+                    const pageWidth = scaledWidth + fixedCommentWidth;
+                    const pageHeight = scaledHeight;
+                    const orientation = pageWidth > pageHeight ? 'landscape' : 'portrait';
+
+                    if (index > 0) {
+                        pdf.addPage([pageWidth, pageHeight], orientation);
+                    } else {
+                        pdf.internal.pageSize.width = pageWidth;
+                        pdf.internal.pageSize.height = pageHeight;
+                        pdf.setPage(1);
+                    }
+
+                    const imgData = await new Promise(resolve => {
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = scaledWidth;
+                        tempCanvas.height = scaledHeight;
+                        const ctx = tempCanvas.getContext('2d');
+                        ctx.drawImage(pageData.canvas, 0, 0, scaledWidth, scaledHeight);
+                        resolve(tempCanvas.toDataURL('image/jpeg', 0.9));
+                    });
+                    pdf.addImage(imgData, 'JPEG', 0, 0, scaledWidth, scaledHeight);
+
+                    if (comment.element.innerText.trim()) {
+                        const commentCanvas = await html2canvas(comment.container, {
+                            scale: 3,
+                            useCORS: true,
+                            backgroundColor: null
+                        });
+                        pdf.addImage(commentCanvas, 'PNG', scaledWidth, 0, fixedCommentWidth, scaledHeight);
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+
+                const totalClone = totalSection.cloneNode(true);
+                totalClone.classList.add('total-comment-pdf');
+                const textarea = totalClone.querySelector('#total-comment-text');
+                const commentText = textarea.value;
+                const textDiv = document.createElement('div');
+                textDiv.style.fontSize = '18px';
+                textDiv.style.lineHeight = '1.5';
+                textDiv.style.padding = '12px';
+                textDiv.style.width = '100%';
+                textDiv.style.boxSizing = 'border-box';
+                textDiv.style.whiteSpace = 'pre-wrap';
+                textDiv.style.wordWrap = 'break-word';
+                textDiv.style.maxHeight = '600px';
+                textDiv.style.overflow = 'hidden';
+                textDiv.textContent = commentText;
+                textarea.parentNode.replaceChild(textDiv, textarea);
+
+                totalClone.style.background = isDarkMode ? 'rgba(50, 50, 50, 0.98)' : 'rgba(255, 255, 255, 0.98)';
+                totalClone.style.border = 'none';
+                totalClone.style.padding = '20px';
+                totalClone.style.fontFamily = "'Noto Serif TC', 'PingFang TC', 'Microsoft JhengHei', serif";
+
+                document.body.appendChild(totalClone);
+                const totalCanvas = await html2canvas(totalClone, {
                     scale: 3,
                     useCORS: true,
-                    backgroundColor: null
+                    width: 794,
+                    height: 1123,
+                    backgroundColor: isDarkMode ? '#323232' : '#fff'
                 });
-                pdf.addImage(commentCanvas, 'PNG', scaledWidth, 0, fixedCommentWidth, scaledHeight);
+                document.body.removeChild(totalClone);
+
+                pdf.addPage([794, 1123], 'portrait');
+                pdf.addImage(totalCanvas, 'PNG', 0, 0, 794, 1123);
+
+                const newFileName = originalFileName ? `${originalFileName}（已批改）.pdf` : '批改結果.pdf';
+                pdf.save(newFileName);
+                progressContainer.style.display = 'none';
+                progressText.style.display = 'none';
+
+                if (currentMode === 'multiplePdfs') {
+                    currentPdfIndex++;
+                    if (currentPdfIndex < pdfFiles.length) {
+                        loadCurrentPdf();
+                    } else {
+                        alert('所有作文已批改完畢，可以下班了！');
+                    }
+                }
+            } catch (error) {
+                console.error('生成PDF失敗:', error);
+                progressContainer.style.display = 'none';
+                progressText.style.display = 'none';
+                alert('PDF生成失敗，請檢查控制台日誌');
             }
-
-            // 模拟耗时操作（可选，如需更精确进度可拆分步骤）
-            await new Promise(resolve => setTimeout(resolve, 50));
         }
-
-        // 处理总评部分（原有逻辑）
-       // 克隆總評部分
-const totalClone = totalSection.cloneNode(true);
-totalClone.classList.add('total-comment-pdf');
-
-// 找到 textarea 並將其內容轉為 div 以正確處理換行
-const textarea = totalClone.querySelector('#total-comment-text');
-const commentText = textarea.value; // 獲取原始文本
-const textDiv = document.createElement('div');
-textDiv.style.fontSize = '18px'; // 與 textarea 的字體大小一致
-textDiv.style.lineHeight = '1.5'; // 確保行距適當
-textDiv.style.padding = '12px'; // 與 textarea 的內邊距一致
-textDiv.style.width = '100%'; // 確保寬度一致
-textDiv.style.boxSizing = 'border-box';
-textDiv.style.whiteSpace = 'pre-wrap'; // 保留換行和空格
-textDiv.style.wordWrap = 'break-word'; // 自動換行
-textDiv.style.maxHeight = '600px'; // 限制最大高度，避免溢出
-textDiv.style.overflow = 'hidden'; // 隱藏超出內容
-textDiv.textContent = commentText; // 設置文本內容
-textarea.parentNode.replaceChild(textDiv, textarea); // 替換 textarea
-
-// 設置總評部分的背景和邊框樣式
-totalClone.style.background = isDarkMode ? 'rgba(50, 50, 50, 0.98)' : 'rgba(255, 255, 255, 0.98)';
-totalClone.style.border = 'none';
-totalClone.style.padding = '20px';
-totalClone.style.fontFamily = "'Noto Serif TC', 'PingFang TC', 'Microsoft JhengHei', serif";
-
-// 臨時添加到 DOM 以生成畫布
-document.body.appendChild(totalClone);
-
-// 使用 html2canvas 生成畫布
-const totalCanvas = await html2canvas(totalClone, {
-    scale: 3,
-    useCORS: true,
-    width: 794,
-    height: 1123,
-    backgroundColor: isDarkMode ? '#323232' : '#fff' // 設置背景色
-});
-
-// 移除臨時元素
-document.body.removeChild(totalClone);
-
-// 添加總評頁到 PDF
-pdf.addPage([794, 1123], 'portrait');
-pdf.addImage(totalCanvas, 'PNG', 0, 0, 794, 1123);
-
-        // 保存PDF并隐藏进度条
-        const newFileName = originalFileName ? `${originalFileName}（已批改）.pdf` : '批改結果.pdf';
-        pdf.save(newFileName);
-        progressContainer.style.display = 'none';
-        progressText.style.display = 'none';
-    } catch (error) {
-        // 错误处理：隐藏进度条并提示错误
-        console.error('生成PDF失败:', error);
-        progressContainer.style.display = 'none';
-        progressText.style.display = 'none';
-        alert('PDF生成失败，请检查控制台日志');
-    }
-}
 
         document.getElementById('document-area').addEventListener('scroll', () => {
             const documentArea = document.getElementById('document-area');
             const commentSection = document.getElementById('comment-section');
             commentSection.style.top = `-${documentArea.scrollTop}px`;
         });
+
+        function showEnlargedImage(file) {
+            const img = new Image();
+            img.src = URL.createObjectURL(file);
+            const win = window.open('');
+            win.document.write(img.outerHTML);
+        }
     </script>
-
-<div class="progress-container">
-    <div class="progress-bar"></div>
-</div>
-<div class="progress-text">生成進度：0%</div>
-
-
 </body>
 </html>
