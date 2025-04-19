@@ -15,6 +15,7 @@
             background: url('https://i.ibb.co/nNMDqGJt/4.png') center/cover fixed;
             overflow: hidden;
             transition: background-color 0.3s, color 0.3s;
+            touch-action: none; /* Prevent default touch behaviors */
         }
         body.dark-mode {
             background-color: #1a1a1a;
@@ -44,10 +45,14 @@
             transform-origin: top left;
             transition: transform 0.3s ease;
             display: block;
+            position: relative;
         }
         .pdf-container canvas, .pdf-container img {
             image-rendering: crisp-edges;
             display: block;
+            user-select: none;
+            -webkit-user-select: none;
+            -ms-user-select: none;
         }
         .comment-area {
             flex: 3;
@@ -480,13 +485,13 @@
             border: 3px solid red;
             border-radius: 50%;
             background: transparent;
-            cursor: pointer;
+            cursor: move;
             pointer-events: auto;
             box-sizing: border-box;
         }
         .highlight {
             position: absolute;
-            cursor: pointer;
+            cursor: default;
             pointer-events: auto;
             box-sizing: border-box;
         }
@@ -785,6 +790,7 @@
                 const img = await loadImage(file);
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
+                
                 const scale = VIEWPORT_WIDTH / img.naturalWidth;
                 canvas.width = img.naturalWidth * scale;
                 canvas.height = img.naturalHeight * scale;
@@ -854,6 +860,7 @@
                 const viewport = page.getViewport({ scale: scale * 2.0 });
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
+
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
                 canvas.style.width = `${viewport.width / 2}px`;
@@ -904,10 +911,12 @@
             for (let i = 0; i < pageCount; i++) {
                 const commentContainer = document.createElement('div');
                 commentContainer.className = 'page-comment-container';
+
                 const pageNumber = document.createElement('div');
                 pageNumber.className = 'page-number';
                 pageNumber.textContent = `${i + 1}`;
                 commentContainer.appendChild(pageNumber);
+
                 const commentDiv = document.createElement('div');
                 commentDiv.className = 'page-comment';
                 commentDiv.contentEditable = true;
@@ -916,17 +925,21 @@
                 const lines = Math.floor((divHeight - 20) / LINE_HEIGHT);
                 commentDiv.textContent = pdfData[currentPdfIndex].comments[i] || '\n'.repeat(lines - 1);
                 commentContainer.appendChild(commentDiv);
+
                 commentSection.appendChild(commentContainer);
+
                 comments.push({
                     element: commentDiv,
                     container: commentContainer,
                     page: i,
                     positionY: pageHeights.slice(0, i).reduce((a, b) => a + b, 0)
                 });
+
                 commentDiv.addEventListener('mousedown', function(e) {
                     handleCommentClick(e, this);
                 });
             }
+
             document.getElementById('font-size').addEventListener('input', function() {
                 fontSize = this.value;
                 comments.forEach(comment => {
@@ -1000,6 +1013,12 @@
                 child.style.transformOrigin = 'top left';
                 symbolContainers[index].style.width = `${parseFloat(child.style.width) * currentZoom}px`;
                 symbolContainers[index].style.height = `${parseFloat(child.style.height) * currentZoom}px`;
+                Array.from(symbolContainers[index].children).forEach(symbol => {
+                    symbol.style.left = `${parseFloat(symbol.dataset.left) * currentZoom}px`;
+                    symbol.style.top = `${parseFloat(symbol.dataset.top) * currentZoom}px`;
+                    symbol.style.width = `${parseFloat(symbol.dataset.width) * currentZoom}px`;
+                    symbol.style.height = `${parseFloat(symbol.dataset.height) * currentZoom}px`;
+                });
             });
             synchronizeHeights();
         }
@@ -1157,10 +1176,10 @@
 
                     Array.from(symbolContainer.children).forEach(symbol => {
                         const clone = symbol.cloneNode(true);
-                        const left = parseFloat(symbol.style.left) / currentZoom;
-                        const top = parseFloat(symbol.style.top) / currentZoom;
-                        const width = parseFloat(symbol.style.width) / currentZoom;
-                        const height = parseFloat(symbol.style.height) / currentZoom;
+                        const left = parseFloat(symbol.dataset.left);
+                        const top = parseFloat(symbol.dataset.top);
+                        const width = parseFloat(symbol.dataset.width);
+                        const height = parseFloat(symbol.dataset.height);
                         clone.style.left = `${left}px`;
                         clone.style.top = `${top}px`;
                         clone.style.width = `${width}px`;
@@ -1261,198 +1280,197 @@
             win.document.write(img.outerHTML);
         }
 
-        // Mouse events for desktop
-        let isMouseDown = false;
-        let startX, startY;
-        let currentPage;
+        // Highlighter and Touch Handling
+        let isDrawing = false;
+        let startX, startY, endX, endY;
+        let currentPage = null;
         let currentSymbol = null;
         let clickCount = 0;
-        let clickTimer = null;
-        const CLICK_DELAY = 250;
+        let touchCount = 0;
+        let lastTapTime = 0;
+        let lastTouchY = 0;
+        let isScrolling = false;
+        let isZooming = false;
+        let initialDistance = 0;
 
         const pdfContainer = document.getElementById('pdf-container');
+        const documentArea = document.getElementById('document-area');
 
-        pdfContainer.addEventListener('mousedown', function(e) {
-            if (e.target.tagName === 'CANVAS') {
+        // Mouse Events
+        pdfContainer.addEventListener('mousedown', startDrawing);
+        document.addEventListener('mousemove', draw);
+        document.addEventListener('mouseup', stopDrawing);
+
+        // Touch Events
+        pdfContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
+        pdfContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
+        pdfContainer.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+        function getCoordinates(e, canvas) {
+            const rect = canvas.getBoundingClientRect();
+            if (e.type.startsWith('touch')) {
+                const touch = e.touches[0] || e.changedTouches[0];
+                return {
+                    x: (touch.clientX - rect.left) / currentZoom,
+                    y: (touch.clientY - rect.top) / currentZoom
+                };
+            } else {
+                return {
+                    x: (e.clientX - rect.left) / currentZoom,
+                    y: (e.clientY - rect.top) / currentZoom
+                };
+            }
+        }
+
+        function getTouchDistance(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function startDrawing(e) {
+            if (e.target.tagName !== 'CANVAS') return;
+            e.preventDefault();
+            currentPage = e.target.dataset.page;
+            const canvas = e.target;
+            const coords = getCoordinates(e, canvas);
+            startX = coords.x;
+            startY = coords.y;
+            isDrawing = true;
+            clickCount++;
+
+            if (clickCount === 1) {
+                setTimeout(() => {
+                    if (clickCount === 1) {
+                        clickCount = 0;
+                    }
+                }, 300);
+            } else if (clickCount === 2) {
+                clickCount = 0;
+            }
+        }
+
+        function handleTouchStart(e) {
+            if (e.target.tagName !== 'CANVAS') return;
+            e.preventDefault();
+            touchCount = e.touches.length;
+
+            if (touchCount === 1) {
+                const now = Date.now();
+                if (now - lastTapTime < 300) {
+                    // Double tap detected
+                    currentPage = null;
+                    isDrawing = false;
+                    lastTapTime = 0;
+                    return;
+                }
+                lastTapTime = now;
                 currentPage = e.target.dataset.page;
                 const canvas = e.target;
-                const rect = canvas.getBoundingClientRect();
-                startX = (e.clientX - rect.left) / currentZoom;
-                startY = (e.clientY - rect.top) / currentZoom;
-                isMouseDown = true;
-                currentSymbol = null;
+                const coords = getCoordinates(e, canvas);
+                startX = coords.x;
+                startY = coords.y;
+                lastTouchY = coords.y;
+                isDrawing = true;
+                isScrolling = false;
+            } else if (touchCount === 2) {
+                isDrawing = false;
+                isZooming = true;
+                initialDistance = getTouchDistance(e.touches);
+                currentPage = null;
+            }
+        }
 
-                clickCount++;
-                if (clickCount === 1) {
-                    clickTimer = setTimeout(() => {
-                        clickCount = 0;
-                    }, CLICK_DELAY);
-                } else if (clickCount === 2) {
-                    clearTimeout(clickTimer);
-                    clickCount = 0;
-                    createCircle(startX, startY, symbolContainers[currentPage - 1]);
+        function draw(e) {
+            if (!isDrawing || !currentPage) return;
+            e.preventDefault();
+            const canvas = pdfPages[currentPage - 1].canvas;
+            const coords = getCoordinates(e, canvas);
+            endX = coords.x;
+            endY = coords.y;
+
+            const dx = Math.abs(endX - startX);
+            const dy = Math.abs(endY - startY);
+
+            if (dx > 5 || dy > 5) {
+                if (!currentSymbol) {
+                    currentSymbol = createHighlight(startX, startY, endX, endY, symbolContainers[currentPage - 1]);
+                } else {
+                    updateHighlight(currentSymbol, startX, startY, endX, endY);
                 }
             }
-        });
+        }
 
-        document.addEventListener('mousemove', function(e) {
-            if (!isMouseDown || !currentPage) return;
+        function handleTouchMove(e) {
+            e.preventDefault();
+            if (isZooming && e.touches.length === 2) {
+                const currentDistance = getTouchDistance(e.touches);
+                const scaleChange = currentDistance / initialDistance;
+                currentZoom = Math.max(0.5, Math.min(2.0, currentZoom * scaleChange));
+                applyZoom();
+                initialDistance = currentDistance;
+                return;
+            }
+
+            if (!isDrawing || !currentPage || e.touches.length !== 1) return;
 
             const canvas = pdfPages[currentPage - 1].canvas;
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / currentZoom;
-            const y = (e.clientY - rect.top) / currentZoom;
+            const coords = getCoordinates(e, canvas);
+            endX = coords.x;
+            endY = coords.y;
 
-            if (currentSymbol) {
-                updateHighlight(currentSymbol, startX, startY, x, y);
-            } else {
-                const distance = Math.sqrt((x - startX) ** 2 + (y - startY) ** 2);
-                if (distance > 5) {
-                    currentSymbol = createHighlight(startX, startY, x, y, symbolContainers[currentPage - 1]);
+            const dx = Math.abs(endX - startX);
+            const dy = Math.abs(endY - startY);
+
+            if (!isScrolling && dy > dx && dy > 5) {
+                isScrolling = true;
+                isDrawing = false;
+                currentSymbol = null;
+                documentArea.scrollTop -= (endY - lastTouchY) * currentZoom;
+            } else if (!isScrolling && (dx > 5 || dy > 5)) {
+                if (!currentSymbol) {
+                    currentSymbol = createHighlight(startX, startY, endX, endY, symbolContainers[currentPage - 1]);
+                } else {
+                    updateHighlight(currentSymbol, startX, startY, endX, endY);
                 }
             }
-        });
+            lastTouchY = endY;
+        }
 
-        document.addEventListener('mouseup', function(e) {
-            if (!isMouseDown || !currentPage) return;
-            isMouseDown = false;
+        function stopDrawing(e) {
+            if (!isDrawing || !currentPage) return;
+            e.preventDefault();
+            isDrawing = false;
+            if (clickCount === 2) {
+                // Double click to remove (handled by dblclick event on symbol)
+            }
             currentPage = null;
             currentSymbol = null;
-        });
-
-        // Touch events for mobile
-        let touchStartX, touchStartY;
-        let touchEndX, touchEndY;
-        let touchStartTime;
-        let isTouching = false;
-        let touchPage;
-        let currentTouchSymbol = null;
-        let touchClickCount = 0;
-        let touchClickTimer = null;
-
-        pdfContainer.addEventListener('touchstart', function(e) {
-            if (e.touches.length === 1) {
-                const touch = e.touches[0];
-                const canvas = findCanvasAtPosition(touch.clientX, touch.clientY);
-                if (canvas) {
-                    touchPage = canvas.dataset.page;
-                    const rect = canvas.getBoundingClientRect();
-                    touchStartX = (touch.clientX - rect.left) / currentZoom;
-                    touchStartY = (touch.clientY - rect.top) / currentZoom;
-                    touchStartTime = Date.now();
-                    isTouching = true;
-                    currentTouchSymbol = null;
-
-                    touchClickCount++;
-                    if (touchClickCount === 1) {
-                        touchClickTimer = setTimeout(() => {
-                            touchClickCount = 0;
-                        }, CLICK_DELAY);
-                    } else if (touchClickCount === 2) {
-                        clearTimeout(touchClickTimer);
-                        touchClickCount = 0;
-                        createCircle(touchStartX, touchStartY, symbolContainers[touchPage - 1]);
-                    }
-                }
-            } else if (e.touches.length === 2) {
-                handlePinchZoom(e);
-            }
-        });
-
-        pdfContainer.addEventListener('touchmove', function(e) {
-            if (e.touches.length === 1 && isTouching) {
-                const touch = e.touches[0];
-                const canvas = pdfPages[touchPage - 1].canvas;
-                const rect = canvas.getBoundingClientRect();
-                touchEndX = (touch.clientX - rect.left) / currentZoom;
-                touchEndY = (touch.clientY - rect.top) / currentZoom;
-
-                const deltaX = touchEndX - touchStartX;
-                const deltaY = touchEndY - touchStartY;
-
-                if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                    if (!currentTouchSymbol) {
-                        currentTouchSymbol = createHighlight(touchStartX, touchStartY, touchEndX, touchEndY, symbolContainers[touchPage - 1]);
-                    } else {
-                        updateHighlight(currentTouchSymbol, touchStartX, touchStartY, touchEndX, touchEndY);
-                    }
-                } else {
-                    isTouching = false;
-                    currentTouchSymbol = null;
-                }
-            } else if (e.touches.length === 2) {
-                handlePinchZoom(e);
-            }
-        });
-
-        pdfContainer.addEventListener('touchend', function(e) {
-            if (isTouching) {
-                isTouching = false;
-                touchPage = null;
-                currentTouchSymbol = null;
-            }
-        });
-
-        // Pinch zoom
-        let initialDistance = 0;
-        let initialZoom = currentZoom;
-
-        function handlePinchZoom(e) {
-            if (e.touches.length === 2) {
-                const touch1 = e.touches[0];
-                const touch2 = e.touches[1];
-                const distance = Math.sqrt((touch1.clientX - touch2.clientX) ** 2 + (touch1.clientY - touch2.clientY) ** 2);
-                if (initialDistance === 0) {
-                    initialDistance = distance;
-                    initialZoom = currentZoom;
-                } else {
-                    const scale = distance / initialDistance;
-                    currentZoom = initialZoom * scale;
-                    if (currentZoom < 0.5) currentZoom = 0.5;
-                    if (currentZoom > 2.0) currentZoom = 2.0;
-                    applyZoom();
-                }
-            } else {
-                initialDistance = 0;
-            }
+            clickCount = 0;
         }
 
-        function findCanvasAtPosition(x, y) {
-            for (let i = 0; i < pdfPages.length; i++) {
-                const canvas = pdfPages[i].canvas;
-                const rect = canvas.getBoundingClientRect();
-                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                    return canvas;
-                }
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            if (isZooming) {
+                isZooming = false;
+                return;
             }
-            return null;
-        }
-
-        function createCircle(x, y, container) {
-            const circle = document.createElement('div');
-            circle.className = 'circle';
-            circle.style.left = `${(x - 15) * currentZoom}px`;
-            circle.style.top = `${(y - 15) * currentZoom}px`;
-            circle.style.width = '30px';
-            circle.style.height = '30px';
-            addSymbolEvents(circle);
-            container.appendChild(circle);
-            return circle;
+            if (!isDrawing || !currentPage) return;
+            isDrawing = false;
+            isScrolling = false;
+            currentPage = null;
+            currentSymbol = null;
         }
 
         function createHighlight(startX, startY, endX, endY, container) {
             const highlight = document.createElement('div');
             highlight.className = 'highlight';
-            const left = Math.min(startX, endX) * currentZoom;
-            const top = Math.min(startY, endY) * currentZoom;
-            const width = Math.abs(endX - startX) * currentZoom;
-            const height = Math.abs(endY - startY) * currentZoom;
-            highlight.style.left = `${left}px`;
-            highlight.style.top = `${top}px`;
-            highlight.style.width = `${width}px`;
-            highlight.style.height = `${height}px`;
-            const color = endX > startX ? 'rgba(255, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
-            highlight.style.background = color;
+            updateHighlight(highlight, startX, startY, endX, endY);
+            // Store original values for PDF generation
+            highlight.dataset.left = Math.min(startX, endX);
+            highlight.dataset.top = Math.min(startY, endY);
+            highlight.dataset.width = Math.abs(endX - startX);
+            highlight.dataset.height = Math.abs(endY - startY);
             addSymbolEvents(highlight);
             container.appendChild(highlight);
             return highlight;
@@ -1463,18 +1481,27 @@
             const top = Math.min(startY, endY) * currentZoom;
             const width = Math.abs(endX - startX) * currentZoom;
             const height = Math.abs(endY - startY) * currentZoom;
+            const color = endX > startX ? 'rgba(255, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
             highlight.style.left = `${left}px`;
             highlight.style.top = `${top}px`;
             highlight.style.width = `${width}px`;
             highlight.style.height = `${height}px`;
-            const color = endX > startX ? 'rgba(255, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
             highlight.style.background = color;
         }
 
         function addSymbolEvents(symbol) {
-            symbol.addEventListener('dblclick', function() {
+            symbol.addEventListener('dblclick', function(e) {
+                e.preventDefault();
                 symbol.remove();
             });
+            symbol.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                const now = Date.now();
+                if (now - lastTapTime < 300) {
+                    symbol.remove();
+                }
+                lastTapTime = now;
+            }, { passive: false });
         }
     </script>
 </body>
