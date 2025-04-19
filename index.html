@@ -534,6 +534,7 @@
                 </div>
                 <div class="tool-title">琢玉</div>
                 <div class="right-controls">
+                    <button onclick="resetZoom()"><i class="fas fa-sync-alt"></i></button>
                     <button onclick="zoomIn()"><i class="fas fa-search-plus"></i></button>
                     <button onclick="zoomOut()"><i class="fas fa-search-minus"></i></button>
                     <button class="mode-toggle" onclick="toggleDarkMode()"><i class="fas fa-moon"></i></button>
@@ -1031,6 +1032,11 @@
             applyZoom();
         }
 
+        function resetZoom() {
+            currentZoom = 1.0;
+            applyZoom();
+        }
+
         function applyZoom() {
             const pdfContainer = document.getElementById('pdf-container');
             const children = Array.from(pdfContainer.children).filter(child => child.tagName === 'CANVAS');
@@ -1408,7 +1414,12 @@
                 const xDistance = Math.abs(endX - startX);
                 const yDistance = Math.abs(endY - startY);
 
-                if (xDistance > yDistance && xDistance > MIN_DISTANCE) {
+                if (xDistance < yDistance) {
+                    // 主要是上下移動，允許頁面滾動
+                    isDrawing = false;
+                    currentSymbol = null;
+                } else if (xDistance > MIN_DISTANCE) {
+                    // 左右拉伸，繪製螢光筆
                     if (!currentSymbol) {
                         currentSymbol = createHighlight(startX, startY, endX, endY, symbolContainers[currentPage - 1]);
                     }
