@@ -519,13 +519,13 @@
             border: 3px solid red;
             border-radius: 50%;
             background: transparent;
-            cursor: move;
+            cursor: pointer;
             pointer-events: auto;
             box-sizing: border-box;
         }
         .highlight {
             position: absolute;
-            cursor: move;
+            cursor: pointer;
             pointer-events: auto;
             box-sizing: border-box;
         }
@@ -666,66 +666,63 @@
         }
 
         document.getElementById('file-upload').addEventListener('change', function(event) {
-    const files = event.target.files;
-    if (files.length === 0) {
-        document.getElementById('file-status').textContent = '';
-        return;
-    }
+            const files = event.target.files;
+            if (files.length === 0) {
+                document.getElementById('file-status').textContent = '';
+                return;
+            }
 
-    const allPdfs = Array.from(files).every(file => file.type === 'application/pdf');
-    const allImages = Array.from(files).every(file => file.type.startsWith('image/'));
+            const allPdfs = Array.from(files).every(file => file.type === 'application/pdf');
+            const allImages = Array.from(files).every(file => file.type.startsWith('image/'));
 
-    if (files.length > 1) {
-        if (allPdfs) {
-            // 多PDF模式（原有邏輯不變）
-            currentMode = 'multiplePdfs';
-            pdfFiles = Array.from(files);
-            pdfData = pdfFiles.map(file => ({
-                file: file,
-                comments: [],
-                totalComment: '',
-                scores: {},
-                categories: {}
-            }));
-            currentPdfIndex = 0;
-            loadCurrentPdf();
-        } else if (allImages) {
-            // 多圖片模式（新增文件名處理邏輯）
-            currentMode = 'multipleImages';
-            orderedFiles = Array.from(files); // 存儲原始選取順序（可通過模態框調整）
-            showFileOrderModal(files); // 彈出順序調整模態框
-        } else {
-            alert('請選擇多個PDF檔案或多張圖片。');
-            return;
-        }
-    } else {
-        // 單文件模式（原有邏輯不變）
-        const file = files[0];
-        originalFileName = file.name.split('.').slice(0, -1).join('.');
-        if (file.type === 'application/pdf') {
-            currentMode = 'singlePdf';
-            pdfFiles = [file];
-            pdfData = [{ file: file, comments: [], totalComment: '', scores: {}, categories: {} }];
-            currentPdfIndex = 0;
-            loadPDF(file);
-            updateFileStatus();
-        } else if (file.type.startsWith('image/')) {
-            currentMode = 'singleImage';
-            pdfFiles = [];
-            pdfData = [{ comments: [], totalComment: '', scores: {}, categories: {} }];
-            currentPdfIndex = 0;
-            handleMultipleImages([file]);
-            updateFileStatus();
-        } else {
-            alert('不支援的檔案類型。');
-            return;
-        }
-    }
+            if (files.length > 1) {
+                if (allPdfs) {
+                    currentMode = 'multiplePdfs';
+                    pdfFiles = Array.from(files);
+                    pdfData = pdfFiles.map(file => ({
+                        file: file,
+                        comments: [],
+                        totalComment: '',
+                        scores: {},
+                        categories: {}
+                    }));
+                    currentPdfIndex = 0;
+                    loadCurrentPdf();
+                } else if (allImages) {
+                    currentMode = 'multipleImages';
+                    orderedFiles = Array.from(files);
+                    showFileOrderModal(files);
+                } else {
+                    alert('請選擇多個PDF檔案或多張圖片。');
+                    return;
+                }
+            } else {
+                const file = files[0];
+                originalFileName = file.name.split('.').slice(0, -1).join('.');
+                if (file.type === 'application/pdf') {
+                    currentMode = 'singlePdf';
+                    pdfFiles = [file];
+                    pdfData = [{ file: file, comments: [], totalComment: '', scores: {}, categories: {} }];
+                    currentPdfIndex = 0;
+                    loadPDF(file);
+                    updateFileStatus();
+                } else if (file.type.startsWith('image/')) {
+                    currentMode = 'singleImage';
+                    pdfFiles = [];
+                    pdfData = [{ comments: [], totalComment: '', scores: {}, categories: {} }];
+                    currentPdfIndex = 0;
+                    handleMultipleImages([file]);
+                    updateFileStatus();
+                } else {
+                    alert('不支援的檔案類型。');
+                    return;
+                }
+            }
 
-    document.getElementById('default-image').style.display = 'none';
-    document.getElementById('pdf-container').style.display = 'block';
-    document.getElementById('document-area').style.overflowY = 'auto';
-});
+            document.getElementById('default-image').style.display = 'none';
+            document.getElementById('pdf-container').style.display = 'block';
+            document.getElementById('document-area').style.overflowY = 'auto';
+        });
 
         function updateFileStatus() {
             const fileStatus = document.getElementById('file-status');
@@ -802,69 +799,67 @@
             });
         }
 
-       document.getElementById('confirm-order').addEventListener('click', function() {
-    document.getElementById('file-order-modal').style.display = 'none';
-    pdfFiles = [];
-    pdfData = [{ comments: [], totalComment: '', scores: {}, categories: {} }];
-    currentPdfIndex = 0;
-    // 關鍵：將調整順序後的檔案傳入處理函數
-    handleMultipleImages(orderedFiles); // orderedFiles 是排序後的圖片陣列
-    updateFileStatus();
-});
-
-        async function handleMultipleImages(files) {
-    // 關鍵修訂：以第一張圖片（調整順序後的首圖）命名
-    originalFileName = files[0].name.split('.').slice(0, -1).join('.'); // 提取文件名（不含副檔名）
-    const pdfContainer = document.getElementById('pdf-container');
-    pdfContainer.innerHTML = '';
-    pdfPages = [];
-    pageHeights = [];
-    baseWidth = 0;
-    comments = [];
-    totalSection = null;
-    symbolContainers = [];
-
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const img = await loadImage(file);
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        const scale = VIEWPORT_WIDTH / img.naturalWidth;
-        canvas.width = img.naturalWidth * scale;
-        canvas.height = img.naturalHeight * scale;
-        canvas.style.width = `${canvas.width}px`;
-        canvas.style.height = `${canvas.height}px`;
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        canvas.dataset.page = i + 1;
-        pdfContainer.appendChild(canvas);
-
-        const symbolContainer = document.createElement('div');
-        symbolContainer.className = 'symbol-container';
-        symbolContainer.style.position = 'absolute';
-        symbolContainer.style.top = `${canvas.offsetTop}px`;
-        symbolContainer.style.left = `${canvas.offsetLeft}px`;
-        symbolContainer.style.width = `${parseFloat(canvas.style.width) * currentZoom}px`;
-        symbolContainer.style.height = `${parseFloat(canvas.style.height) * currentZoom}px`;
-        symbolContainer.style.pointerEvents = 'none';
-        pdfContainer.appendChild(symbolContainer);
-        symbolContainers.push(symbolContainer);
-
-        pdfPages.push({
-            canvas: canvas,
-            originalWidth: img.naturalWidth,
-            originalHeight: img.naturalHeight
+        document.getElementById('confirm-order').addEventListener('click', function() {
+            document.getElementById('file-order-modal').style.display = 'none';
+            pdfFiles = [];
+            pdfData = [{ comments: [], totalComment: '', scores: {}, categories: {} }];
+            currentPdfIndex = 0;
+            handleMultipleImages(orderedFiles);
+            updateFileStatus();
         });
 
-        pageHeights.push(canvas.height);
-        if (baseWidth === 0) baseWidth = canvas.width;
-    }
+        async function handleMultipleImages(files) {
+            originalFileName = files[0].name.split('.').slice(0, -1).join('.');
+            const pdfContainer = document.getElementById('pdf-container');
+            pdfContainer.innerHTML = '';
+            pdfPages = [];
+            pageHeights = [];
+            baseWidth = 0;
+            comments = [];
+            totalSection = null;
+            symbolContainers = [];
 
-    initComments(files.length);
-    synchronizeHeights();
-    appendTotalSection();
-    updateFileStatus();
-}
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const img = await loadImage(file);
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                const scale = VIEWPORT_WIDTH / img.naturalWidth;
+                canvas.width = img.naturalWidth * scale;
+                canvas.height = img.naturalHeight * scale;
+                canvas.style.width = `${canvas.width}px`;
+                canvas.style.height = `${canvas.height}px`;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                canvas.dataset.page = i + 1;
+                pdfContainer.appendChild(canvas);
+
+                const symbolContainer = document.createElement('div');
+                symbolContainer.className = 'symbol-container';
+                symbolContainer.style.position = 'absolute';
+                symbolContainer.style.top = `${canvas.offsetTop}px`;
+                symbolContainer.style.left = `${canvas.offsetLeft}px`;
+                symbolContainer.style.width = `${parseFloat(canvas.style.width) * currentZoom}px`;
+                symbolContainer.style.height = `${parseFloat(canvas.style.height) * currentZoom}px`;
+                symbolContainer.style.pointerEvents = 'none';
+                pdfContainer.appendChild(symbolContainer);
+                symbolContainers.push(symbolContainer);
+
+                pdfPages.push({
+                    canvas: canvas,
+                    originalWidth: img.naturalWidth,
+                    originalHeight: img.naturalHeight
+                });
+
+                pageHeights.push(canvas.height);
+                if (baseWidth === 0) baseWidth = canvas.width;
+            }
+
+            initComments(files.length);
+            synchronizeHeights();
+            appendTotalSection();
+            updateFileStatus();
+        }
 
         function loadImage(file) {
             return new Promise((resolve, reject) => {
@@ -1135,177 +1130,170 @@
             document.getElementById('total-score').innerText = content + structure + expression + punctuation + bonus;
         }
 
-       async function generatePDF() {
-    if (pdfPages.length === 0) return;
+        async function generatePDF() {
+            if (pdfPages.length === 0) return;
 
-    // 保存當前文件的批改數據
-    pdfData[currentPdfIndex].comments = comments.map(comment => comment.element.textContent);
-    pdfData[currentPdfIndex].totalComment = document.getElementById('total-comment-text').value;
-    pdfData[currentPdfIndex].scores = {
-        content: document.getElementById('content-score').value,
-        structure: document.getElementById('structure-score').value,
-        expression: document.getElementById('expression-score').value,
-        punctuation: document.getElementById('punctuation-score').value,
-        bonus: document.getElementById('bonus-score').value
-    };
+            pdfData[currentPdfIndex].comments = comments.map(comment => comment.element.textContent);
+            pdfData[currentPdfIndex].totalComment = document.getElementById('total-comment-text').value;
+            pdfData[currentPdfIndex].scores = {
+                content: document.getElementById('content-score').value,
+                structure: document.getElementById('structure-score').value,
+                expression: document.getElementById('expression-score').value,
+                punctuation: document.getElementById('punctuation-score').value,
+                bonus: document.getElementById('bonus-score').value
+            };
 
-    // 顯示進度條
-    const progressContainer = document.querySelector('.progress-container');
-    const progressBar = document.querySelector('.progress-bar');
-    const progressText = document.querySelector('.progress-text');
-    progressContainer.style.display = 'block';
-    progressText.style.display = 'block';
-    progressBar.style.width = '0%';
-    progressText.textContent = '生成進度：0%';
+            const progressContainer = document.querySelector('.progress-container');
+            const progressBar = document.querySelector('.progress-bar');
+            const progressText = document.querySelector('.progress-text');
+            progressContainer.style.display = 'block';
+            progressText.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressText.textContent = '生成進度：0%';
 
-    const pdf = new jsPDF({
-        unit: 'px',
-        compress: true
-    });
-    const totalPages = pdfPages.length;
-
-    try {
-        // 生成每一頁的 PDF
-        for (let index = 0; index < totalPages; index++) {
-            const pageData = pdfPages[index];
-            const comment = comments[index];
-            const symbolContainer = symbolContainers[index];
-
-            const progress = ((index + 1) / (totalPages + 1)) * 100;
-            progressBar.style.width = `${progress.toFixed(1)}%`;
-            progressText.textContent = `生成進度：${progress.toFixed(1)}%`;
-
-            const originalWidth = pageData.originalWidth;
-            const originalHeight = pageData.originalHeight;
-            let scale = VIEWPORT_WIDTH / originalWidth;
-            if (originalWidth < VIEWPORT_WIDTH) {
-                scale = VIEWPORT_WIDTH / originalWidth;
-            }
-            const pdfWidth = VIEWPORT_WIDTH * currentZoom;
-            const pdfHeight = originalHeight * scale * currentZoom;
-            const isPortrait = pdfHeight >= pdfWidth;
-            const fixedCommentWidth = isPortrait ? 400 : 300;
-            const pageWidth = pdfWidth + fixedCommentWidth;
-            const pageHeight = pdfHeight;
-
-            if (index > 0) {
-                pdf.addPage([pageWidth, pageHeight], pageWidth > pageHeight ? 'landscape' : 'portrait');
-            } else {
-                pdf.internal.pageSize.width = pageWidth;
-                pdf.internal.pageSize.height = pageHeight;
-                pdf.setPage(1);
-            }
-
-            const tempContainer = document.createElement('div');
-            tempContainer.style.position = 'absolute';
-            tempContainer.style.width = `${pdfWidth}px`;
-            tempContainer.style.height = `${pdfHeight}px`;
-            tempContainer.style.left = '-9999px';
-            document.body.appendChild(tempContainer);
-
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = pdfWidth;
-            tempCanvas.height = pdfHeight;
-            const ctx = tempCanvas.getContext('2d');
-            ctx.drawImage(pageData.canvas, 0, 0, pdfWidth, pdfHeight);
-            tempContainer.appendChild(tempCanvas);
-
-            Array.from(symbolContainer.children).forEach(symbol => {
-                const clone = symbol.cloneNode(true);
-                const left = parseFloat(symbol.style.left) / currentZoom;
-                const top = parseFloat(symbol.style.top) / currentZoom;
-                const width = parseFloat(symbol.style.width) / currentZoom;
-                const height = parseFloat(symbol.style.height) / currentZoom;
-                clone.style.left = `${left}px`;
-                clone.style.top = `${top}px`;
-                clone.style.width = `${width}px`;
-                clone.style.height = `${height}px`;
-                clone.style.transform = 'none';
-                tempContainer.appendChild(clone);
+            const pdf = new jsPDF({
+                unit: 'px',
+                compress: true
             });
+            const totalPages = pdfPages.length;
 
-            const pageCanvas = await html2canvas(tempContainer, {
-                scale: 1,
-                useCORS: true,
-                backgroundColor: null
-            });
-            document.body.removeChild(tempContainer);
+            try {
+                for (let index = 0; index < totalPages; index++) {
+                    const pageData = pdfPages[index];
+                    const comment = comments[index];
+                    const symbolContainer = symbolContainers[index];
 
-            pdf.addImage(pageCanvas, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                    const progress = ((index + 1) / (totalPages + 1)) * 100;
+                    progressBar.style.width = `${progress.toFixed(1)}%`;
+                    progressText.textContent = `生成進度：${progress.toFixed(1)}%`;
 
-            if (comment.element.innerText.trim()) {
-                comment.container.classList.add('pdf-border');
-                const commentCanvas = await html2canvas(comment.container, {
+                    const originalWidth = pageData.originalWidth;
+                    const originalHeight = pageData.originalHeight;
+                    let scale = VIEWPORT_WIDTH / originalWidth;
+                    if (originalWidth < VIEWPORT_WIDTH) {
+                        scale = VIEWPORT_WIDTH / originalWidth;
+                    }
+                    const pdfWidth = VIEWPORT_WIDTH * currentZoom;
+                    const pdfHeight = originalHeight * scale * currentZoom;
+                    const isPortrait = pdfHeight >= pdfWidth;
+                    const fixedCommentWidth = isPortrait ? 400 : 300;
+                    const pageWidth = pdfWidth + fixedCommentWidth;
+                    const pageHeight = pdfHeight;
+
+                    if (index > 0) {
+                        pdf.addPage([pageWidth, pageHeight], pageWidth > pageHeight ? 'landscape' : 'portrait');
+                    } else {
+                        pdf.internal.pageSize.width = pageWidth;
+                        pdf.internal.pageSize.height = pageHeight;
+                        pdf.setPage(1);
+                    }
+
+                    const tempContainer = document.createElement('div');
+                    tempContainer.style.position = 'absolute';
+                    tempContainer.style.width = `${pdfWidth}px`;
+                    tempContainer.style.height = `${pdfHeight}px`;
+                    tempContainer.style.left = '-9999px';
+                    document.body.appendChild(tempContainer);
+
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = pdfWidth;
+                    tempCanvas.height = pdfHeight;
+                    const ctx = tempCanvas.getContext('2d');
+                    ctx.drawImage(pageData.canvas, 0, 0, pdfWidth, pdfHeight);
+                    tempContainer.appendChild(tempCanvas);
+
+                    Array.from(symbolContainer.children).forEach(symbol => {
+                        const clone = symbol.cloneNode(true);
+                        const left = parseFloat(symbol.style.left) / currentZoom;
+                        const top = parseFloat(symbol.style.top) / currentZoom;
+                        const width = parseFloat(symbol.style.width) / currentZoom;
+                        const height = parseFloat(symbol.style.height) / currentZoom;
+                        clone.style.left = `${left}px`;
+                        clone.style.top = `${top}px`;
+                        clone.style.width = `${width}px`;
+                        clone.style.height = `${height}px`;
+                        clone.style.transform = 'none';
+                        tempContainer.appendChild(clone);
+                    });
+
+                    const pageCanvas = await html2canvas(tempContainer, {
+                        scale: 1,
+                        useCORS: true,
+                        backgroundColor: null
+                    });
+                    document.body.removeChild(tempContainer);
+
+                    pdf.addImage(pageCanvas, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+                    if (comment.element.innerText.trim()) {
+                        comment.container.classList.add('pdf-border');
+                        const commentCanvas = await html2canvas(comment.container, {
+                            scale: 3,
+                            useCORS: true,
+                            backgroundColor: null
+                        });
+                        comment.container.classList.remove('pdf-border');
+                        pdf.addImage(commentCanvas, 'PNG', pdfWidth, 0, fixedCommentWidth, pdfHeight);
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+
+                const totalClone = totalSection.cloneNode(true);
+                totalClone.classList.add('total-comment-pdf');
+                const textarea = totalClone.querySelector('#total-comment-text');
+                const commentText = textarea.value;
+                const textDiv = document.createElement('div');
+                textDiv.style.fontSize = '18px';
+                textDiv.style.lineHeight = '1.5';
+                textDiv.style.padding = '12px';
+                textDiv.style.width = '100%';
+                textDiv.style.boxSizing = 'border-box';
+                textDiv.style.whiteSpace = 'pre-wrap';
+                textDiv.style.wordWrap = 'break-word';
+                textDiv.style.maxHeight = '600px';
+                textDiv.style.overflow = 'hidden';
+                textDiv.textContent = commentText;
+                textarea.parentNode.replaceChild(textDiv, textarea);
+
+                totalClone.style.background = isDarkMode ? 'rgba(50, 50, 50, 0.98)' : 'rgba(255, 255, 255, 0.98)';
+                totalClone.style.border = 'none';
+                totalClone.style.padding = '20px';
+                totalClone.style.fontFamily = "'Noto Serif TC', 'PingFang TC', 'Microsoft JhengHei', serif";
+
+                document.body.appendChild(totalClone);
+                const totalCanvas = await html2canvas(totalClone, {
                     scale: 3,
                     useCORS: true,
-                    backgroundColor: null
+                    width: 794,
+                    height: 1123,
+                    backgroundColor: isDarkMode ? '#323232' : '#fff'
                 });
-                comment.container.classList.remove('pdf-border');
-                pdf.addImage(commentCanvas, 'PNG', pdfWidth, 0, fixedCommentWidth, pdfHeight);
-            }
+                document.body.removeChild(totalClone);
 
-            await new Promise(resolve => setTimeout(resolve, 50));
-        }
+                pdf.addPage([794, 1123], 'portrait');
+                pdf.addImage(totalCanvas, 'PNG', 0, 0, 794, 1123);
 
-        // 生成總評頁
-        const totalClone = totalSection.cloneNode(true);
-        totalClone.classList.add('total-comment-pdf');
-        const textarea = totalClone.querySelector('#total-comment-text');
-        const commentText = textarea.value;
-        const textDiv = document.createElement('div');
-        textDiv.style.fontSize = '18px';
-        textDiv.style.lineHeight = '1.5';
-        textDiv.style.padding = '12px';
-        textDiv.style.width = '100%';
-        textDiv.style.boxSizing = 'border-box';
-        textDiv.style.whiteSpace = 'pre-wrap';
-        textDiv.style.wordWrap = 'break-word';
-        textDiv.style.maxHeight = '600px';
-        textDiv.style.overflow = 'hidden';
-        textDiv.textContent = commentText;
-        textarea.parentNode.replaceChild(textDiv, textarea);
+                const newFileName = originalFileName ? `${originalFileName}【已批改】.pdf` : '批改結果.pdf';
+                pdf.save(newFileName);
+                progressContainer.style.display = 'none';
+                progressText.style.display = 'none';
 
-        totalClone.style.background = isDarkMode ? 'rgba(50, 50, 50, 0.98)' : 'rgba(255, 255, 255, 0.98)';
-        totalClone.style.border = 'none';
-        totalClone.style.padding = '20px';
-        totalClone.style.fontFamily = "'Noto Serif TC', 'PingFang TC', 'Microsoft JhengHei', serif";
-
-        document.body.appendChild(totalClone);
-        const totalCanvas = await html2canvas(totalClone, {
-            scale: 3,
-            useCORS: true,
-            width: 794,
-            height: 1123,
-            backgroundColor: isDarkMode ? '#323232' : '#fff'
-        });
-        document.body.removeChild(totalClone);
-
-        pdf.addPage([794, 1123], 'portrait');
-        pdf.addImage(totalCanvas, 'PNG', 0, 0, 794, 1123);
-
-        // 保存 PDF 文件
-        const newFileName = originalFileName ? `${originalFileName}【已批改】.pdf` : '批改結果.pdf';
-        pdf.save(newFileName);
-        progressContainer.style.display = 'none';
-        progressText.style.display = 'none';
-
-        // 多文件模式下的處理
-        if (currentMode === 'multiplePdfs') {
-            if (currentPdfIndex < pdfFiles.length - 1) {
-                currentPdfIndex++;
-                loadCurrentPdf();
-            } else {
-                // 當到達最後一個文件時，顯示消息但不阻止再次生成
-                alert('所有作文批改完畢，可以下班了！');
+                if (currentMode === 'multiplePdfs') {
+                    if (currentPdfIndex < pdfFiles.length - 1) {
+                        currentPdfIndex++;
+                        loadCurrentPdf();
+                    } else {
+                        alert('所有作文批改完畢，可以下班了！');
+                    }
+                }
+            } catch (error) {
+                console.error('生成PDF失敗:', error);
+                progressContainer.style.display = 'none';
+                progressText.style.display = 'none';
+                alert('PDF生成失敗，請檢查控制台日誌');
             }
         }
-    } catch (error) {
-        console.error('生成PDF失敗:', error);
-        progressContainer.style.display = 'none';
-        progressText.style.display = 'none';
-        alert('PDF生成失敗，請檢查控制台日誌');
-    }
-}
 
         document.getElementById('document-area').addEventListener('scroll', () => {
             const documentArea = document.getElementById('document-area');
@@ -1320,24 +1308,26 @@
             win.document.write(img.outerHTML);
         }
 
-        let isMouseDown = false;
+        let isDrawing = false;
         let startX, startY;
         let currentPage;
-        let currentSymbol = null;
+        let currentHighlight = null;
         let clickTimeout = null;
         const CLICK_DELAY = 250;
 
         const pdfContainer = document.getElementById('pdf-container');
 
+        // Mouse Events
         pdfContainer.addEventListener('mousedown', function(e) {
             if (e.target.tagName === 'CANVAS') {
+                e.preventDefault();
                 currentPage = e.target.dataset.page;
                 const canvas = e.target;
                 const rect = canvas.getBoundingClientRect();
                 startX = (e.clientX - rect.left) / currentZoom;
                 startY = (e.clientY - rect.top) / currentZoom;
-                isMouseDown = true;
-                currentSymbol = null;
+                isDrawing = true;
+                currentHighlight = null;
 
                 if (clickTimeout) {
                     clearTimeout(clickTimeout);
@@ -1347,35 +1337,26 @@
         });
 
         document.addEventListener('mousemove', function(e) {
-            if (!isMouseDown || !currentPage) return;
+            if (!isDrawing || !currentPage) return;
 
             const canvas = pdfPages[currentPage - 1].canvas;
             const rect = canvas.getBoundingClientRect();
             const x = (e.clientX - rect.left) / currentZoom;
             const y = (e.clientY - rect.top) / currentZoom;
 
-            if (currentSymbol) {
-                const color = x > startX ? 'rgba(255, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
-                currentSymbol.style.background = color;
-                const left = Math.min(startX, x) * currentZoom;
-                const top = Math.min(startY, y) * currentZoom;
-                const width = Math.abs(x - startX) * currentZoom;
-                const height = Math.abs(y - startY) * currentZoom;
-                currentSymbol.style.left = `${left}px`;
-                currentSymbol.style.top = `${top}px`;
-                currentSymbol.style.width = `${width}px`;
-                currentSymbol.style.height = `${height}px`;
+            if (currentHighlight) {
+                updateHighlight(currentHighlight, startX, startY, x, y);
             } else {
                 const distance = Math.sqrt((x - startX) ** 2 + (y - startY) ** 2);
                 if (distance > 5) {
-                    currentSymbol = createHighlight(startX, startY, x, y, symbolContainers[currentPage - 1]);
+                    currentHighlight = createHighlightPreview(startX, startY, x, y, symbolContainers[currentPage - 1]);
                 }
             }
         });
 
         document.addEventListener('mouseup', function(e) {
-            if (!isMouseDown || !currentPage) return;
-            isMouseDown = false;
+            if (!isDrawing || !currentPage) return;
+            isDrawing = false;
 
             const canvas = pdfPages[currentPage - 1].canvas;
             const rect = canvas.getBoundingClientRect();
@@ -1393,6 +1374,63 @@
                         clickTimeout = null;
                     }, CLICK_DELAY);
                 }
+            } else if (currentHighlight) {
+                finalizeHighlight(currentHighlight, startX, startY, endX, endY, symbolContainers[currentPage - 1]);
+                currentHighlight = null;
+            }
+            currentPage = null;
+        });
+
+        // Touch Events
+        pdfContainer.addEventListener('touchstart', function(e) {
+            if (e.target.tagName === 'CANVAS') {
+                e.preventDefault();
+                const touch = e.touches[0];
+                currentPage = e.target.dataset.page;
+                const canvas = e.target;
+                const rect = canvas.getBoundingClientRect();
+                startX = (touch.clientX - rect.left) / currentZoom;
+                startY = (touch.clientY - rect.top) / currentZoom;
+                isDrawing = true;
+                currentHighlight = null;
+            }
+        });
+
+        document.addEventListener('touchmove', function(e) {
+            if (!isDrawing || !currentPage) return;
+
+            const touch = e.touches[0];
+            const canvas = pdfPages[currentPage - 1].canvas;
+            const rect = canvas.getBoundingClientRect();
+            const x = (touch.clientX - rect.left) / currentZoom;
+            const y = (touch.clientY - rect.top) / currentZoom;
+
+            if (currentHighlight) {
+                updateHighlight(currentHighlight, startX, startY, x, y);
+            } else {
+                const distance = Math.sqrt((x - startX) ** 2 + (y - startY) ** 2);
+                if (distance > 5) {
+                    currentHighlight = createHighlightPreview(startX, startY, x, y, symbolContainers[currentPage - 1]);
+                }
+            }
+        });
+
+        document.addEventListener('touchend', function(e) {
+            if (!isDrawing || !currentPage) return;
+            isDrawing = false;
+
+            const touch = e.changedTouches[0];
+            const canvas = pdfPages[currentPage - 1].canvas;
+            const rect = canvas.getBoundingClientRect();
+            const endX = (touch.clientX - rect.left) / currentZoom;
+            const endY = (touch.clientY - rect.top) / currentZoom;
+            const distance = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+
+            if (distance < 5) {
+                createCircle(startX, startY, symbolContainers[currentPage - 1]);
+            } else if (currentHighlight) {
+                finalizeHighlight(currentHighlight, startX, startY, endX, endY, symbolContainers[currentPage - 1]);
+                currentHighlight = null;
             }
             currentPage = null;
         });
@@ -1409,27 +1447,42 @@
             return circle;
         }
 
-        function createHighlight(startX, startY, endX, endY, container) {
+        function createHighlightPreview(startX, startY, endX, endY, container) {
             const highlight = document.createElement('div');
             highlight.className = 'highlight';
+            highlight.style.position = 'absolute';
+            highlight.style.pointerEvents = 'none'; // Prevent interaction during preview
+            updateHighlight(highlight, startX, startY, endX, endY);
+            container.appendChild(highlight);
+            return highlight;
+        }
+
+        function updateHighlight(highlight, startX, startY, endX, endY) {
             const left = Math.min(startX, endX) * currentZoom;
             const top = Math.min(startY, endY) * currentZoom;
             const width = Math.abs(endX - startX) * currentZoom;
             const height = Math.abs(endY - startY) * currentZoom;
+            const color = endX > startX ? 'rgba(255, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
+            
             highlight.style.left = `${left}px`;
             highlight.style.top = `${top}px`;
             highlight.style.width = `${width}px`;
             highlight.style.height = `${height}px`;
-            const color = endX > startX ? 'rgba(255, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)';
             highlight.style.background = color;
+        }
+
+        function finalizeHighlight(highlight, startX, startY, endX, endY, container) {
+            highlight.style.pointerEvents = 'auto'; // Enable interaction after creation
             addSymbolEvents(highlight);
-            container.appendChild(highlight);
-            return highlight;
+            updateHighlight(highlight, startX, startY, endX, endY); // Ensure final position
         }
 
         function addSymbolEvents(symbol) {
             symbol.addEventListener('dblclick', function() {
                 symbol.remove();
+            });
+            symbol.addEventListener('touchstart', function(e) {
+                e.stopPropagation(); // Prevent touch events from bubbling up
             });
         }
     </script>
