@@ -1,4 +1,43 @@
-<!DOCTYPE html>
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
@@ -27,7 +66,7 @@
         }
         .document-area {
             flex: 7;
-            overflow-y: hidden;
+            overflow-y: auto;
             background: #f5f5f5;
             position: relative;
         }
@@ -42,10 +81,11 @@
             display: block;
         }
         .pdf-container {
-            transform-origin: top left;
+            transform-origin: center center;
             transition: transform 0.3s ease;
             display: block;
             user-select: none;
+            position: relative;
         }
         .pdf-container canvas, .pdf-container img {
             image-rendering: crisp-edges;
@@ -996,7 +1036,7 @@
             const children = Array.from(pdfContainer.children).filter(child => child.tagName === 'CANVAS');
             children.forEach((child, index) => {
                 child.style.transform = `scale(${currentZoom})`;
-                child.style.transformOrigin = 'top left';
+                child.style.transformOrigin = 'center center';
                 symbolContainers[index].style.width = `${parseFloat(child.style.width) * currentZoom}px`;
                 symbolContainers[index].style.height = `${parseFloat(child.style.height) * currentZoom}px`;
             });
@@ -1268,6 +1308,7 @@
         let touchCount = 0;
         let initialPinchDistance = null;
         let pinchStartZoom = 1.0;
+        let pinchCenterX, pinchCenterY;
         const CLICK_DELAY = 300;
         const MIN_DISTANCE = 5;
 
@@ -1332,6 +1373,8 @@
                     touch1.clientY - touch2.clientY
                 );
                 pinchStartZoom = currentZoom;
+                pinchCenterX = (touch1.clientX + touch2.clientX) / 2;
+                pinchCenterY = (touch1.clientY + touch2.clientY) / 2;
                 e.preventDefault();
             } else if (e.touches.length === 1) {
                 const touch = e.touches[0];
@@ -1390,9 +1433,16 @@
                 );
                 const scaleChange = currentDistance / initialPinchDistance;
                 currentZoom = pinchStartZoom * scaleChange;
-                if (currentZoom < 0.5) currentZoom = 0.5;
-                if (currentZoom > 2.0) currentZoom = 2.0;
-                applyZoom();
+                currentZoom = Math.max(0.5, Math.min(2.0, currentZoom));
+
+                const children = Array.from(pdfContainer.children).filter(child => child.tagName === 'CANVAS');
+                children.forEach((child, index) => {
+                    child.style.transform = `scale(${currentZoom})`;
+                    child.style.transformOrigin = 'center center';
+                    symbolContainers[index].style.width = `${parseFloat(child.style.width) * currentZoom}px`;
+                    symbolContainers[index].style.height = `${parseFloat(child.style.height) * currentZoom}px`;
+                });
+                synchronizeHeights();
                 e.preventDefault();
             }
         });
