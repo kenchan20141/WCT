@@ -54,7 +54,7 @@
             background: url('https://i.ibb.co/nNMDqGJt/4.png') center/cover fixed;
             overflow: hidden;
             transition: background-color 0.3s, color 0.3s;
-            touch-action: manipulation;
+            touch-action: none; /* 防止觸控時的預設行為 */
         }
         body.dark-mode {
             background-color: #1a1a1a;
@@ -80,16 +80,18 @@
             object-fit: cover;
             display: block;
         }
-        .pdf-container {
-            transform-origin: center center;
-            transition: transform 0.3s ease;
+        #pages-container {
+            transform-origin: top left;
             display: block;
-            user-select: none;
             position: relative;
+            user-select: none;
         }
-        .pdf-container canvas, .pdf-container img {
+        #pages-container canvas, #pages-container img {
             image-rendering: crisp-edges;
             display: block;
+        }
+        .page-wrapper {
+            margin-bottom: 20px; /* 初始頁面間距 */
         }
         .comment-area {
             flex: 3;
@@ -541,7 +543,7 @@
                 </div>
             </div>
             <img id="default-image" src="https://i.ibb.co/DH4C0TgB/image.png" alt="Default Image">
-            <div class="pdf-container" id="pdf-container" style="display: none;"></div>
+            <div id="pages-container" style="display: none;"></div>
         </div>
         <div class="comment-area" id="comment-area">
             <div class="comment-section" id="comment-section">
@@ -613,6 +615,7 @@
         let currentPdfIndex = 0;
         let pdfPages = [];
         let pdfDoc = null;
+        let currentZoom = 1.0;
         let totalSection = null;
         let pageHeights = [];
         let baseWidth = 0;
@@ -626,9 +629,7 @@
         let currentMode = '';
         const VIEWPORT_WIDTH = 875;
         let symbolContainers = [];
-        let currentPageIndex = -1;
-        let initialPinchDistance = null;
-        let pinchStartZoom = 1.0;
+        let zoomAnimationFrame = null;
 
         function toggleDarkMode() {
             isDarkMode = !isDarkMode;
@@ -638,19 +639,12 @@
         }
 
         function synchronizeHeights() {
-            const pdfContainer = document.getElementById('pdf-container');
+            const pagesContainer = document.getElementById('pages-container');
             const commentSection = document.getElementById('comment-section');
-            const children = Array.from(pdfContainer.children).filter(child => child.tagName === 'CANVAS');
-            const totalHeight = children.reduce((acc, child, index) => {
-                const page = pdfPages[index];
-                return acc + (child.offsetHeight * page.zoom);
-            }, 0);
-
-            pdfContainer.style.height = `${totalHeight}px`;
+            const totalHeight = pagesContainer.offsetHeight * currentZoom;
             commentSection.style.height = `${totalHeight}px`;
             comments.forEach((comment, index) => {
-                const page = pdfPages[index];
-                const pageHeight = page.canvas.offsetHeight * page.zoom;
+                const pageHeight = pageHeights[index] * currentZoom;
                 comment.container.style.height = `${pageHeight}px`;
                 comment.element.style.height = `${pageHeight - 20}px`;
                 const lines = Math.floor((pageHeight - 20) / LINE_HEIGHT);
@@ -719,7 +713,7 @@
             }
 
             document.getElementById('default-image').style.display = 'none';
-            document.getElementById('pdf-container').style.display = 'block';
+            document.getElementById('pages-container').style.display = 'block';
             document.getElementById('document-area').style.overflowY = 'auto';
         });
 
@@ -745,9 +739,10 @@
             pdfPages = [];
             comments = [];
             totalSection = null;
+            currentZoom = 1.0;
             symbolContainers = [];
-            const pdfContainer = document.getElementById('pdf-container');
-            pdfContainer.innerHTML = '';
+            const pagesContainer = document.getElementById('pages-container');
+            pagesContainer.innerHTML = '';
 
             const currentPdf = pdfFiles[currentPdfIndex];
             originalFileName = currentPdf.name.split('.').slice(0, -1).join('.');
@@ -808,8 +803,8 @@
 
         async function handleMultipleImages(files) {
             originalFileName = files[0].name.split('.').slice(0, -1).join('.');
-            const pdfContainer = document.getElementById('pdf-container');
-            pdfContainer.innerHTML = '';
+            const pagesContainer = document.getElementById('pages-container');
+            pagesContainer.innerHTML = '';
             pdfPages = [];
             pageHeights = [];
             baseWidth = 0;
@@ -830,24 +825,29 @@
                 canvas.style.height = `${canvas.height}px`;
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 canvas.dataset.page = i + 1;
-                pdfContainer.appendChild(canvas);
+
+                const pageWrapper = document.createElement('div');
+                pageWrapper.className = 'page-wrapper';
+                pageWrapper.appendChild(canvas);
 
                 const symbolContainer = document.createElement('div');
                 symbolContainer.className = 'symbol-container';
                 symbolContainer.style.position = 'absolute';
                 symbolContainer.style.top = `${canvas.offsetTop}px`;
                 symbolContainer.style.left = `${canvas.offsetLeft}px`;
-                symbolContainer.style.width = `${canvas.width}px`;
-                symbolContainer.style.height = `${canvas.height}px`;
+                symbolContainer.style.width = `${parseFloat(canvas.style.width) * currentZoom}px`;
+                symbolContainer.style.height = `${parseFloat(canvas.style.height) * currentZoom}px`;
                 symbolContainer.style.pointerEvents = 'none';
-                pdfContainer.appendChild(symbolContainer);
+                pageWrapper.appendChild(symbolContainer);
                 symbolContainers.push(symbolContainer);
+
+                pagesContainer.appendChild(pageWrapper);
 
                 pdfPages.push({
                     canvas: canvas,
                     originalWidth: img.naturalWidth,
                     originalHeight: img.naturalHeight,
-                    zoom: 1.0
+                    initialHeight: canvas.height
                 });
 
                 pageHeights.push(canvas.height);
@@ -873,14 +873,14 @@
             const url = URL.createObjectURL(file);
             pdfjsLib.getDocument(url).promise.then(pdf => {
                 pdfDoc = pdf;
-                const pdfContainer = document.getElementById('pdf-container');
-                pdfContainer.innerHTML = '';
+                const pagesContainer = document.getElementById('pages-container');
+                pagesContainer.innerHTML = '';
                 pdfPages = [];
                 pageHeights = [];
                 comments = [];
                 totalSection = null;
                 symbolContainers = [];
-                renderAllPages(pdf, pdfContainer);
+                renderAllPages(pdf, pagesContainer);
             });
         }
 
@@ -900,24 +900,29 @@
                 canvas.style.height = `${viewport.height / 2}px`;
                 canvas.dataset.page = pageNum;
                 await page.render({ canvasContext: context, viewport }).promise;
-                container.appendChild(canvas);
+
+                const pageWrapper = document.createElement('div');
+                pageWrapper.className = 'page-wrapper';
+                pageWrapper.appendChild(canvas);
 
                 const symbolContainer = document.createElement('div');
                 symbolContainer.className = 'symbol-container';
                 symbolContainer.style.position = 'absolute';
                 symbolContainer.style.top = `${canvas.offsetTop}px`;
                 symbolContainer.style.left = `${canvas.offsetLeft}px`;
-                symbolContainer.style.width = `${viewport.width / 2}px`;
-                symbolContainer.style.height = `${viewport.height / 2}px`;
+                symbolContainer.style.width = `${parseFloat(canvas.style.width) * currentZoom}px`;
+                symbolContainer.style.height = `${parseFloat(canvas.style.height) * currentZoom}px`;
                 symbolContainer.style.pointerEvents = 'none';
-                container.appendChild(symbolContainer);
+                pageWrapper.appendChild(symbolContainer);
                 symbolContainers.push(symbolContainer);
+
+                container.appendChild(pageWrapper);
 
                 pdfPages.push({
                     canvas: canvas,
                     originalWidth: originalViewport.width,
                     originalHeight: originalViewport.height,
-                    zoom: 1.0
+                    initialHeight: viewport.height / 2
                 });
 
                 pageHeights.push(viewport.height / 2);
@@ -954,7 +959,7 @@
                 const commentDiv = document.createElement('div');
                 commentDiv.className = 'page-comment';
                 commentDiv.contentEditable = true;
-                const divHeight = pageHeights[i] * pdfPages[i].zoom;
+                const divHeight = pageHeights[i] * currentZoom;
                 commentDiv.style.fontSize = `${fontSize}px`;
                 const lines = Math.floor((divHeight - 20) / LINE_HEIGHT);
                 commentDiv.textContent = pdfData[currentPdfIndex].comments[i] || '\n'.repeat(lines - 1);
@@ -1030,46 +1035,49 @@
         }
 
         function zoomIn() {
-            if (currentPageIndex !== -1) {
-                pdfPages[currentPageIndex].zoom = Math.min(2.0, pdfPages[currentPageIndex].zoom + 0.2);
-                applyZoom();
-            }
+            currentZoom += 0.05;
+            applyZoom();
         }
 
         function zoomOut() {
-            if (currentPageIndex !== -1) {
-                pdfPages[currentPageIndex].zoom = Math.max(0.5, pdfPages[currentPageIndex].zoom - 0.2);
-                applyZoom();
-            }
+            if (currentZoom > 1.0) currentZoom -= 0.05;
+            applyZoom();
         }
 
         function resetZoom() {
-            pdfPages.forEach(page => page.zoom = 1.0);
+            currentZoom = 1.0;
             applyZoom();
         }
 
         function applyZoom() {
-            const pdfContainer = document.getElementById('pdf-container');
-            const children = Array.from(pdfContainer.children).filter(child => child.tagName === 'CANVAS');
-            children.forEach((child, index) => {
-                const page = pdfPages[index];
-                child.style.transform = `scale(${page.zoom})`;
-                child.style.transformOrigin = 'top left';
-                symbolContainers[index].style.width = `${parseFloat(child.style.width) * page.zoom}px`;
-                symbolContainers[index].style.height = `${parseFloat(child.style.height) * page.zoom}px`;
-            });
-            synchronizeHeights();
-        }
+            if (zoomAnimationFrame) cancelAnimationFrame(zoomAnimationFrame);
 
-        function findPageAtPosition(x, y) {
-            for (let i = 0; i < pdfPages.length; i++) {
-                const canvas = pdfPages[i].canvas;
-                const rect = canvas.getBoundingClientRect();
-                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                    return i;
-                }
-            }
-            return -1;
+            zoomAnimationFrame = requestAnimationFrame(() => {
+                const pagesContainer = document.getElementById('pages-container');
+                pagesContainer.style.transform = `scale(${currentZoom})`;
+                pagesContainer.style.transformOrigin = 'top left';
+
+                const totalHeight = pdfPages.reduce((acc, page) => acc + (page.initialHeight * currentZoom) + (20 * currentZoom), 0);
+                pagesContainer.style.width = `${baseWidth * currentZoom}px`;
+                pagesContainer.style.height = `${totalHeight}px`;
+
+                symbolContainers.forEach((container, index) => {
+                    const page = pdfPages[index];
+                    const canvas = page.canvas;
+                    const offsetTop = pdfPages.slice(0, index).reduce((acc, p) => acc + p.initialHeight * currentZoom + 20 * currentZoom, 0);
+                    container.style.left = `${canvas.offsetLeft * currentZoom}px`;
+                    container.style.top = `${offsetTop}px`;
+                    container.style.width = `${page.initialWidth * currentZoom}px`;
+                    container.style.height = `${page.initialHeight * currentZoom}px`;
+                });
+
+                const wrappers = pagesContainer.getElementsByClassName('page-wrapper');
+                Array.from(wrappers).forEach(wrapper => {
+                    wrapper.style.marginBottom = `${20 * currentZoom}px`;
+                });
+
+                synchronizeHeights();
+            });
         }
 
         function appendTotalSection() {
@@ -1115,7 +1123,7 @@
                     </div>
                     <button onclick="generatePDF()"><i class="fas fa-file-pdf"></i> 生成PDF</button>
                 `;
-                document.getElementById('pdf-container').appendChild(totalSection);
+                document.getElementById('pages-container').appendChild(totalSection);
                 document.querySelectorAll('.score-input input').forEach(input => {
                     input.addEventListener('input', calculateTotalScore);
                 });
@@ -1194,8 +1202,8 @@
                     if (originalWidth < VIEWPORT_WIDTH) {
                         scale = VIEWPORT_WIDTH / originalWidth;
                     }
-                    const pdfWidth = VIEWPORT_WIDTH;
-                    const pdfHeight = originalHeight * scale;
+                    const pdfWidth = VIEWPORT_WIDTH * currentZoom;
+                    const pdfHeight = originalHeight * scale * currentZoom;
                     const isPortrait = pdfHeight >= pdfWidth;
                     const fixedCommentWidth = isPortrait ? 400 : 300;
                     const pageWidth = pdfWidth + fixedCommentWidth;
@@ -1225,10 +1233,10 @@
 
                     Array.from(symbolContainer.children).forEach(symbol => {
                         const clone = symbol.cloneNode(true);
-                        const left = parseFloat(symbol.style.left) / pageData.zoom;
-                        const top = parseFloat(symbol.style.top) / pageData.zoom;
-                        const width = parseFloat(symbol.style.width) / pageData.zoom;
-                        const height = parseFloat(symbol.style.height) / pageData.zoom;
+                        const left = parseFloat(symbol.style.left) / currentZoom;
+                        const top = parseFloat(symbol.style.top) / currentZoom;
+                        const width = parseFloat(symbol.style.width) / currentZoom;
+                        const height = parseFloat(symbol.style.height) / currentZoom;
                         clone.style.left = `${left}px`;
                         clone.style.top = `${top}px`;
                         clone.style.width = `${width}px`;
@@ -1329,22 +1337,25 @@
             win.document.write(img.outerHTML);
         }
 
-        let isDrawing = false;
-        let startX, startY;
-        let currentSymbol = null;
+        let startX, startY, endX, endY;
         let currentPage = null;
+        let currentSymbol = null;
+        let isDrawing = false;
+        let touchCount = 0;
+        let initialPinchDistance = null;
+        let pinchStartZoom = 1.0;
         const CLICK_DELAY = 300;
         const MIN_DISTANCE = 5;
 
-        const pdfContainer = document.getElementById('pdf-container');
+        const pagesContainer = document.getElementById('pages-container');
 
-        pdfContainer.addEventListener('mousedown', function(e) {
+        pagesContainer.addEventListener('mousedown', function(e) {
             if (e.target.tagName !== 'CANVAS') return;
             const canvas = e.target;
             currentPage = canvas.dataset.page;
             const rect = canvas.getBoundingClientRect();
-            startX = (e.clientX - rect.left) / pdfPages[currentPage - 1].zoom;
-            startY = (e.clientY - rect.top) / pdfPages[currentPage - 1].zoom;
+            startX = (e.clientX - rect.left) / currentZoom;
+            startY = (e.clientY - rect.top) / currentZoom;
             isDrawing = true;
             currentSymbol = null;
             e.preventDefault();
@@ -1354,8 +1365,8 @@
             if (!isDrawing || !currentPage) return;
             const canvas = pdfPages[currentPage - 1].canvas;
             const rect = canvas.getBoundingClientRect();
-            const endX = (e.clientX - rect.left) / pdfPages[currentPage - 1].zoom;
-            const endY = (e.clientY - rect.top) / pdfPages[currentPage - 1].zoom;
+            endX = (e.clientX - rect.left) / currentZoom;
+            endY = (e.clientY - rect.top) / currentZoom;
 
             const xDistance = Math.abs(endX - startX);
             const yDistance = Math.abs(endY - startY);
@@ -1366,10 +1377,10 @@
                 }
                 const color = endX > startX ? 'rgba(255, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)';
                 currentSymbol.style.background = color;
-                const left = Math.min(startX, endX) * pdfPages[currentPage - 1].zoom;
-                const top = Math.min(startY, endY) * pdfPages[currentPage - 1].zoom;
-                const width = Math.abs(endX - startX) * pdfPages[currentPage - 1].zoom;
-                const height = Math.abs(endY - startY) * pdfPages[currentPage - 1].zoom;
+                const left = Math.min(startX, endX) * currentZoom;
+                const top = Math.min(startY, endY) * currentZoom;
+                const width = Math.abs(endX - startX) * currentZoom;
+                const height = Math.abs(endY - startY) * currentZoom;
                 currentSymbol.style.left = `${left}px`;
                 currentSymbol.style.top = `${top}px`;
                 currentSymbol.style.width = `${width}px`;
@@ -1385,84 +1396,89 @@
             }
         });
 
-        pdfContainer.addEventListener('touchstart', function(e) {
-            if (e.target.tagName !== 'CANVAS') return;
+        pagesContainer.addEventListener('touchstart', function(e) {
             if (e.touches.length === 2) {
                 const touch1 = e.touches[0];
                 const touch2 = e.touches[1];
-                const x1 = touch1.clientX;
-                const y1 = touch1.clientY;
-                const x2 = touch2.clientX;
-                const y2 = touch2.clientY;
-                const centerX = (x1 + x2) / 2;
-                const centerY = (y1 + y2) / 2;
-                const pageIndex = findPageAtPosition(centerX, centerY);
-                if (pageIndex !== -1) {
-                    currentPageIndex = pageIndex;
-                    initialPinchDistance = Math.hypot(x1 - x2, y1 - y2);
-                    pinchStartZoom = pdfPages[pageIndex].zoom;
-                }
+                initialPinchDistance = Math.hypot(
+                    touch1.clientX - touch2.clientX,
+                    touch1.clientY - touch2.clientY
+                );
+                pinchStartZoom = currentZoom;
                 e.preventDefault();
-            } else if (e.touches.length === 1) {
+            } else if (e.touches.length === 1 && e.target.tagName === 'CANVAS') {
                 const touch = e.touches[0];
                 const canvas = e.target;
                 currentPage = canvas.dataset.page;
                 const rect = canvas.getBoundingClientRect();
-                startX = (touch.clientX - rect.left) / pdfPages[currentPage - 1].zoom;
-                startY = (touch.clientY - rect.top) / pdfPages[currentPage - 1].zoom;
-                isDrawing = true;
-                currentSymbol = null;
-                e.preventDefault();
+                startX = (touch.clientX - rect.left) / currentZoom;
+                startY = (touch.clientY - rect.top) / currentZoom;
+                touchCount++;
+                if (touchCount === 1) {
+                    setTimeout(() => {
+                        if (touchCount === 1) touchCount = 0;
+                    }, CLICK_DELAY);
+                } else if (touchCount === 2) {
+                    isDrawing = true;
+                    currentSymbol = null;
+                    touchCount = 0;
+                    e.preventDefault();
+                }
             }
         });
 
-        pdfContainer.addEventListener('touchmove', function(e) {
+        pagesContainer.addEventListener('touchmove', function(e) {
             if (e.touches.length === 1 && isDrawing) {
                 const touch = e.touches[0];
                 const canvas = pdfPages[currentPage - 1].canvas;
                 const rect = canvas.getBoundingClientRect();
-                const endX = (touch.clientX - rect.left) / pdfPages[currentPage - 1].zoom;
-                const endY = (touch.clientY - rect.top) / pdfPages[currentPage - 1].zoom;
+                endX = (touch.clientX - rect.left) / currentZoom;
+                endY = (touch.clientY - rect.top) / currentZoom;
 
                 const xDistance = Math.abs(endX - startX);
                 const yDistance = Math.abs(endY - startY);
 
-                if (xDistance > MIN_DISTANCE) {
+                if (xDistance < yDistance) {
+                    isDrawing = false;
+                    currentSymbol = null;
+                } else if (xDistance > MIN_DISTANCE) {
                     if (!currentSymbol) {
                         currentSymbol = createHighlight(startX, startY, endX, endY, symbolContainers[currentPage - 1]);
                     }
                     const color = endX > startX ? 'rgba(255, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)';
                     currentSymbol.style.background = color;
-                    const left = Math.min(startX, endX) * pdfPages[currentPage - 1].zoom;
-                    const top = Math.min(startY, endY) * pdfPages[currentPage - 1].zoom;
-                    const width = Math.abs(endX - startX) * pdfPages[currentPage - 1].zoom;
-                    const height = Math.abs(endY - startY) * pdfPages[currentPage - 1].zoom;
+                    const left = Math.min(startX, endX) * currentZoom;
+                    const top = Math.min(startY, endY) * currentZoom;
+                    const width = Math.abs(endX - startX) * currentZoom;
+                    const height = Math.abs(endY - startY) * currentZoom;
                     currentSymbol.style.left = `${left}px`;
                     currentSymbol.style.top = `${top}px`;
                     currentSymbol.style.width = `${width}px`;
                     currentSymbol.style.height = `${height}px`;
                     e.preventDefault();
                 }
-            } else if (e.touches.length === 2 && currentPageIndex !== -1) {
+            } else if (e.touches.length === 2 && initialPinchDistance !== null) {
                 const touch1 = e.touches[0];
                 const touch2 = e.touches[1];
-                const currentDistance = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
+                const currentDistance = Math.hypot(
+                    touch1.clientX - touch2.clientX,
+                    touch1.clientY - touch2.clientY
+                );
                 const scaleChange = currentDistance / initialPinchDistance;
-                const newZoom = pinchStartZoom * scaleChange;
-                pdfPages[currentPageIndex].zoom = Math.max(0.5, Math.min(2.0, newZoom));
+                currentZoom = pinchStartZoom * scaleChange;
+                currentZoom = Math.max(1.0, currentZoom);
                 applyZoom();
                 e.preventDefault();
             }
         });
 
-        pdfContainer.addEventListener('touchend', function(e) {
+        pagesContainer.addEventListener('touchend', function(e) {
             if (isDrawing) {
                 isDrawing = false;
                 currentPage = null;
                 currentSymbol = null;
             }
             if (e.touches.length < 2) {
-                currentPageIndex = -1;
                 initialPinchDistance = null;
             }
         });
@@ -1470,10 +1486,10 @@
         function createHighlight(startX, startY, endX, endY, container) {
             const highlight = document.createElement('div');
             highlight.className = 'highlight';
-            const left = Math.min(startX, endX) * pdfPages[currentPage - 1].zoom;
-            const top = Math.min(startY, endY) * pdfPages[currentPage - 1].zoom;
-            const width = Math.abs(endX - startX) * pdfPages[currentPage - 1].zoom;
-            const height = Math.abs(endY - startY) * pdfPages[currentPage - 1].zoom;
+            const left = Math.min(startX, endX) * currentZoom;
+            const top = Math.min(startY, endY) * currentZoom;
+            const width = Math.abs(endX - startX) * currentZoom;
+            const height = Math.abs(endY - startY) * currentZoom;
             highlight.style.left = `${left}px`;
             highlight.style.top = `${top}px`;
             highlight.style.width = `${width}px`;
