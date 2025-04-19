@@ -15,7 +15,7 @@
             background: url('https://i.ibb.co/nNMDqGJt/4.png') center/cover fixed;
             overflow: hidden;
             transition: background-color 0.3s, color 0.3s;
-            touch-action: manipulation; /* 優化觸控行為 */
+            touch-action: manipulation;
         }
         body.dark-mode {
             background-color: #1a1a1a;
@@ -45,7 +45,7 @@
             transform-origin: top left;
             transition: transform 0.3s ease;
             display: block;
-            user-select: none; /* 防止觸控時選中文本 */
+            user-select: none;
         }
         .pdf-container canvas, .pdf-container img {
             image-rendering: crisp-edges;
@@ -479,7 +479,7 @@
             position: absolute;
             pointer-events: auto;
             box-sizing: border-box;
-            cursor: pointer; /* 允許點擊移除 */
+            cursor: pointer;
         }
     </style>
 </head>
@@ -982,12 +982,12 @@
         }
 
         function zoomIn() {
-            currentZoom += 0.1;
+            currentZoom += 0.05;
             applyZoom();
         }
 
         function zoomOut() {
-            if (currentZoom > 0.5) currentZoom -= 0.1;
+            if (currentZoom > 0.5) currentZoom -= 0.05;
             applyZoom();
         }
 
@@ -1261,41 +1261,33 @@
         }
 
         // 高亮筆功能相關變數
-        let clickCount = 0;
         let startX, startY, endX, endY;
         let currentPage = null;
         let currentSymbol = null;
         let isDrawing = false;
-        const CLICK_DELAY = 300; // 雙擊檢測時間窗口（毫秒）
-        const MIN_DISTANCE = 5; // 最小拖動距離（像素）
+        let touchCount = 0;
+        let initialPinchDistance = null;
+        let pinchStartZoom = 1.0;
+        const CLICK_DELAY = 300;
+        const MIN_DISTANCE = 5;
 
-        // 桌面滑鼠事件
         const pdfContainer = document.getElementById('pdf-container');
 
+        // Mouse events for non-touch devices
         pdfContainer.addEventListener('mousedown', function(e) {
             if (e.target.tagName !== 'CANVAS') return;
-            clickCount++;
             const canvas = e.target;
             currentPage = canvas.dataset.page;
             const rect = canvas.getBoundingClientRect();
             startX = (e.clientX - rect.left) / currentZoom;
             startY = (e.clientY - rect.top) / currentZoom;
-
-            if (clickCount === 1) {
-                setTimeout(() => {
-                    if (clickCount === 1) clickCount = 0; // 單擊超時重置
-                }, CLICK_DELAY);
-            } else if (clickCount === 2) {
-                isDrawing = true;
-                currentSymbol = null;
-                clickCount = 0; // 重置計數
-                e.preventDefault();
-            }
+            isDrawing = true;
+            currentSymbol = null;
+            e.preventDefault();
         });
 
         document.addEventListener('mousemove', function(e) {
             if (!isDrawing || !currentPage) return;
-
             const canvas = pdfPages[currentPage - 1].canvas;
             const rect = canvas.getBoundingClientRect();
             endX = (e.clientX - rect.left) / currentZoom;
@@ -1304,12 +1296,11 @@
             const xDistance = Math.abs(endX - startX);
             const yDistance = Math.abs(endY - startY);
 
-            if (!currentSymbol && xDistance > MIN_DISTANCE) {
-                currentSymbol = createHighlight(startX, startY, endX, endY, symbolContainers[currentPage - 1]);
-            }
-
-            if (currentSymbol) {
-                const color = endX > startX ? 'rgba(255, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)'; // 螢光黃與紅，半透明
+            if (xDistance > MIN_DISTANCE) {
+                if (!currentSymbol) {
+                    currentSymbol = createHighlight(startX, startY, endX, endY, symbolContainers[currentPage - 1]);
+                }
+                const color = endX > startX ? 'rgba(255, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)';
                 currentSymbol.style.background = color;
                 const left = Math.min(startX, endX) * currentZoom;
                 const top = Math.min(startY, endY) * currentZoom;
@@ -1330,31 +1321,25 @@
             }
         });
 
-        // 觸控事件處理
-        let touchStartTime;
-        let touchCount = 0;
-        let initialPinchDistance = null;
-
+        // Touch events for mobile devices
         pdfContainer.addEventListener('touchstart', function(e) {
             if (e.target.tagName !== 'CANVAS') return;
-            const touch = e.touches[0];
-            const canvas = e.target;
-            currentPage = canvas.dataset.page;
-            const rect = canvas.getBoundingClientRect();
-            startX = (touch.clientX - rect.left) / currentZoom;
-            startY = (touch.clientY - rect.top) / currentZoom;
-            touchStartTime = Date.now();
-
             if (e.touches.length === 2) {
-                // 雙指縮放
                 const touch1 = e.touches[0];
                 const touch2 = e.touches[1];
                 initialPinchDistance = Math.hypot(
                     touch1.clientX - touch2.clientX,
                     touch1.clientY - touch2.clientY
                 );
+                pinchStartZoom = currentZoom;
                 e.preventDefault();
-            } else {
+            } else if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                const canvas = e.target;
+                currentPage = canvas.dataset.page;
+                const rect = canvas.getBoundingClientRect();
+                startX = (touch.clientX - rect.left) / currentZoom;
+                startY = (touch.clientY - rect.top) / currentZoom;
                 touchCount++;
                 if (touchCount === 1) {
                     setTimeout(() => {
@@ -1397,7 +1382,6 @@
                     e.preventDefault();
                 }
             } else if (e.touches.length === 2 && initialPinchDistance !== null) {
-                // 雙指縮放
                 const touch1 = e.touches[0];
                 const touch2 = e.touches[1];
                 const currentDistance = Math.hypot(
@@ -1405,13 +1389,10 @@
                     touch1.clientY - touch2.clientY
                 );
                 const scaleChange = currentDistance / initialPinchDistance;
-                if (scaleChange > 1.05) {
-                    zoomIn();
-                    initialPinchDistance = currentDistance;
-                } else if (scaleChange < 0.95 && currentZoom > 0.5) {
-                    zoomOut();
-                    initialPinchDistance = currentDistance;
-                }
+                currentZoom = pinchStartZoom * scaleChange;
+                if (currentZoom < 0.5) currentZoom = 0.5;
+                if (currentZoom > 2.0) currentZoom = 2.0;
+                applyZoom();
                 e.preventDefault();
             }
         });
