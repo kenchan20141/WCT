@@ -1337,7 +1337,7 @@
             const y = (e.clientY - rect.top) / currentZoom;
 
             if (currentSymbol) {
-                const color = x > startX ? 'rgba(255, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
+                const color = x > startX ? 'rgba(255, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)';
                 currentSymbol.style.background = color;
                 const left = Math.min(startX, x) * currentZoom;
                 const top = Math.min(startY, y) * currentZoom;
@@ -1412,7 +1412,7 @@
             const x = (touch.clientX - rect.left) / currentZoom;
             const y = (touch.clientY - rect.top) / currentZoom;
             if (currentSymbol) {
-                const color = x > highlightStartX ? 'rgba(255, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
+                const color = x > highlightStartX ? 'rgba(255, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)';
                 currentSymbol.style.background = color;
                 const left = Math.min(highlightStartX, x) * currentZoom;
                 const top = Math.min(highlightStartY, y) * currentZoom;
