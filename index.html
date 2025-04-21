@@ -531,6 +531,7 @@
                 </div>
                 <div class="tool-title">琢玉</div>
                 <div class="right-controls">
+<button onclick="resetZoom()"><i class="fas fa-sync-alt"></i></button>
                     <button onclick="zoomIn()"><i class="fas fa-search-plus"></i></button>
                     <button onclick="zoomOut()"><i class="fas fa-search-minus"></i></button>
                     <button class="mode-toggle" onclick="toggleDarkMode()"><i class="fas fa-moon"></i></button>
@@ -1022,6 +1023,12 @@
             sel.addRange(range);
             element.focus();
         }
+
+function resetZoom() {
+    currentZoom = 1.0;
+    applyZoom();
+}
+
 
         function zoomIn() {
             currentZoom += 0.2;
