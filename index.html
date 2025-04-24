@@ -170,7 +170,7 @@
             width: 100%;
             box-sizing: border-box;
             min-height: 80px;
-            font-size: 28px;
+            font-size: 40px;
             line-height: 1.5;
             white-space: pre-wrap;
             word-wrap: break-word;
@@ -531,7 +531,7 @@
                 </div>
                 <div class="tool-title">琢玉</div>
                 <div class="right-controls">
-<button onclick="resetZoom()"><i class="fas fa-sync-alt"></i></button>
+                    <button onclick="resetZoom()"><i class="fas fa-sync-alt"></i></button>
                     <button onclick="zoomIn()"><i class="fas fa-search-plus"></i></button>
                     <button onclick="zoomOut()"><i class="fas fa-search-minus"></i></button>
                     <button class="mode-toggle" onclick="toggleDarkMode()"><i class="fas fa-moon"></i></button>
@@ -546,7 +546,7 @@
                     <h3>旁批</h3>
                     <div class="font-size-control">
                         <label for="font-size">文字大小:</label>
-                        <input type="range" id="font-size" min="20" max="48" value="28" step="2">
+                        <input type="range" id="font-size" min="20" max="70" value="40" step="2">
                     </div>
                 </div>
             </div>
@@ -615,14 +615,14 @@
         let pageHeights = [];
         let baseWidth = 0;
         let comments = [];
-        let fontSize = 28;
+        let fontSize = 40;
         const LINE_HEIGHT = 38;
         let currentFileType = '';
         let isDarkMode = false;
         let originalFileName = '';
         let orderedFiles = [];
         let currentMode = '';
-        const VIEWPORT_WIDTH = 875;
+        const VIEWPORT_WIDTH = document.getElementById('document-area').clientWidth || 875;
         let symbolContainers = [];
         let lastTapTime = 0;
         let lastTapX = 0;
@@ -814,17 +814,19 @@
             totalSection = null;
             symbolContainers = [];
 
+            const docAreaWidth = document.getElementById('document-area').clientWidth;
+
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const img = await loadImage(file);
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                
-                const scale = VIEWPORT_WIDTH / img.naturalWidth;
-                canvas.width = img.naturalWidth * scale;
-                canvas.height = img.naturalHeight * scale;
-                canvas.style.width = `${canvas.width}px`;
-                canvas.style.height = `${canvas.height}px`;
+
+                const scale = docAreaWidth / img.naturalWidth;
+                canvas.width = img.naturalWidth * scale * 2;
+                canvas.height = img.naturalHeight * scale * 2;
+                canvas.style.width = `${canvas.width / 2}px`;
+                canvas.style.height = `${canvas.height / 2}px`;
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 canvas.dataset.page = i + 1;
                 pdfContainer.appendChild(canvas);
@@ -846,8 +848,8 @@
                     originalHeight: img.naturalHeight
                 });
 
-                pageHeights.push(canvas.height);
-                if (baseWidth === 0) baseWidth = canvas.width;
+                pageHeights.push(canvas.height / 2);
+                if (baseWidth === 0) baseWidth = canvas.width / 2;
             }
 
             initComments(files.length);
@@ -882,10 +884,12 @@
 
         async function renderAllPages(pdf, container) {
             baseWidth = 0;
+            const docAreaWidth = document.getElementById('document-area').clientWidth;
+
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                 const page = await pdf.getPage(pageNum);
                 const originalViewport = page.getViewport({ scale: 1.0 });
-                const scale = VIEWPORT_WIDTH / originalViewport.width;
+                const scale = docAreaWidth / originalViewport.width;
                 const viewport = page.getViewport({ scale: scale * 2.0 });
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
@@ -1024,11 +1028,10 @@
             element.focus();
         }
 
-function resetZoom() {
-    currentZoom = 1.0;
-    applyZoom();
-}
-
+        function resetZoom() {
+            currentZoom = 1.0;
+            applyZoom();
+        }
 
         function zoomIn() {
             currentZoom += 0.2;
